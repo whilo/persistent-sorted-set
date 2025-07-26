@@ -24,6 +24,14 @@
    :exec-args   {:dirs ["test-clojure"]
                  :patterns ["me\\.tonsky\\.persistent-sorted-set\\.test.*"]}}
   
+  :async-test
+  {:extra-paths ["test-clojure"]
+   :extra-deps
+   {org.clojure/clojure {:mvn/version "1.11.1"}
+    org.clojure/clojurescript {:mvn/version "1.11.60"}
+    org.clojure/core.async {:mvn/version "1.8.741"}}
+   :main-opts ["-m" "cognitect.test-runner"]}
+  
   :bench
   {:extra-paths ["test-clojure" "bench-clojure"]
    :extra-deps

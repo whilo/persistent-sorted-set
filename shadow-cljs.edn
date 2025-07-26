@@ -1,4 +1,8 @@
 {:source-paths ["src-clojure" "test-clojure" "bench-clojure"]
+ 
+ :dependencies
+ [[org.clojure/core.async "1.8.741"]]
+ 
  :builds
  {:bench
   {:target           :node-script
@@ -10,4 +14,22 @@
   {:target           :node-test
    :output-to        "target/test.js"
    :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\..*$"
+   :compiler-options {:infer-externs true}}
+   
+  :async-test
+  {:target           :node-test
+   :output-to        "target/async-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.async.*$"
+   :compiler-options {:infer-externs true}}
+   
+  :debug
+  {:target           :node-script
+   :main             debug-test/test-sync
+   :output-to        "target/debug.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-comparator
+  {:target           :node-script
+   :main             test-comparator/-main
+   :output-to        "target/test-comparator.js"
    :compiler-options {:infer-externs true}}}}
