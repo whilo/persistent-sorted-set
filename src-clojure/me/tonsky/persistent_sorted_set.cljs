@@ -548,11 +548,8 @@
        (child node (path-get path level)))
       (.-keys node))))
 
-(defn alter-btset 
-  ([^BTSet set root shift cnt]
-   (BTSet. root shift cnt (.-comparator set) (.-meta set) uninitialized-hash (.-storage set)))
-  ([^BTSet set root shift cnt cmp]
-   (BTSet. root shift cnt cmp (.-meta set) uninitialized-hash (.-storage set))))
+(defn alter-btset [^BTSet set root shift cnt]
+  (BTSet. root shift cnt (.-comparator set) (.-meta set) uninitialized-hash (.-storage set)))
 
 ;; iteration
 
@@ -1070,27 +1067,29 @@
    (let [{:keys [sync?] :or {sync? true}} opts]
      (if sync?
        ;; Synchronous path - no go block at all
-       (let [roots (node-conj (.-root set) cmp key (.-storage set) opts)]
-         (cond
-           ;; tree not changed
-           (nil? roots)
-           set
+       (do
+         (let [root (.-root set)
+               _ (when (nil? root)
+                   (throw (js/Error. (str "Root is nil! set=" set))))
+               roots (node-conj root cmp key (.-storage set) opts)]
+           (cond
+             ;; tree not changed
+             (nil? roots)
+             set
 
-           ;; keeping single root
-           (== (arrays/alength roots) 1)
-           (alter-btset set
-                        (arrays/aget roots 0)
-                        (.-shift set)
-                        (inc (.-cnt set))
-                        cmp)
+             ;; keeping single root
+             (== (arrays/alength roots) 1)
+             (alter-btset set
+                          (arrays/aget roots 0)
+                          (.-shift set)
+                          (inc (.-cnt set)))
 
-           ;; introducing new root
-           :else
-           (alter-btset set
-                        (Node. (arrays/amap node-lim-key roots) roots nil)
-                        (inc (.-shift set))
-                        (inc (.-cnt set))
-                        cmp)))
+             ;; introducing new root
+             :else
+             (alter-btset set
+                          (Node. (arrays/amap node-lim-key roots) roots nil)
+                          (inc (.-shift set))
+                          (inc (.-cnt set))))))
        ;; Asynchronous path - with go block
        (go
          (let [roots (<! (node-conj (.-root set) cmp key (.-storage set) opts))]
@@ -1104,16 +1103,14 @@
              (alter-btset set
                           (arrays/aget roots 0)
                           (.-shift set)
-                          (inc (.-cnt set))
-                          cmp)
+                          (inc (.-cnt set)))
 
              ;; introducing new root
              :else
              (alter-btset set
                           (Node. (arrays/amap node-lim-key roots) roots nil)
                           (inc (.-shift set))
-                          (inc (.-cnt set))
-                          cmp))))))))
+                          (inc (.-cnt set))))))))))
 
 (defn disj
   "Analogue to [[clojure.core/disj]] with comparator that overrides the one stored in set.
@@ -1135,15 +1132,13 @@
                  (alter-btset set
                               (arrays/aget (.-pointers new-root) 0)
                               (dec (.-shift set))
-                              (dec (.-cnt set))
-                              cmp)
+                              (dec (.-cnt set)))
 
                  ;; keeping root level
                  (alter-btset set
                               new-root
                               (.-shift set)
-                              (dec (.-cnt set))
-                              cmp))))))))))
+                              (dec (.-cnt set))))))))))))
 
 (defn slice
   "An iterator for part of the set with provided boundaries.
@@ -1216,8 +1211,11 @@
    - :comparator  Custom comparator (defaults to compare)
    - :meta     Metadata"
   [opts]
-  (BTSet. (Leaf. (arrays/array) nil) 0 0 (or (:comparator opts) compare)
-          (:meta opts) uninitialized-hash (:storage opts)))
+  (let [root (Leaf. (arrays/array) nil)]
+    (when (nil? root)
+      (throw (js/Error. "Creating nil root!")))
+    (BTSet. root 0 0 (or (:comparator opts) compare)
+            (:meta opts) uninitialized-hash (:storage opts))))
 
 (defn store-set
   "Store the set to storage. Returns address or channel depending on sync mode.

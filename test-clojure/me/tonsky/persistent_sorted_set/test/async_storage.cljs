@@ -138,7 +138,11 @@
           s2 (set/conj s1 2)
           s3 (set/conj s2 3)]
       
-      (is (= [3 2 1] (vec s3))))))
+      (is (= [3 2 1] (vec s3)))
+      
+      ;; Override comparator
+      (let [s4 (set/conj s3 1.5 <)]
+        (is (= [1.5 3 2 1] (vec s4)))))))
 
 ;; Run tests
 (defn ^:export run-tests []

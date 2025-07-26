@@ -24,7 +24,7 @@
    
   :debug
   {:target           :node-script
-   :main             debug-test/test-sync
+   :main             debug-comparator/-main
    :output-to        "target/debug.js"
    :compiler-options {:infer-externs true}}
    
@@ -32,4 +32,10 @@
   {:target           :node-script
    :main             test-comparator/-main
    :output-to        "target/test-comparator.js"
+   :compiler-options {:infer-externs true}}
+   
+  :sync-only-test
+  {:target           :node-test
+   :output-to        "target/sync-only-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.sync-only"
    :compiler-options {:infer-externs true}}}}
