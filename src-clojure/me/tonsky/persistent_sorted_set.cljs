@@ -1138,12 +1138,17 @@
   "Async version of slice that returns a channel with elements"
   [^BTSet set key-from key-to comparator]
   (go
-    (when-some [path (<! (-seek* set key-from comparator {:sync? false}))]
-      (let [till-path (<! (-rseek* set key-to comparator {:sync? false}))]
-        (when (path-lt path till-path)
-          (let [iter-ch (async/chan)]
+    (let [iter-ch (async/chan)]
+      (if-some [path (<! (-seek* set key-from comparator {:sync? false}))]
+        (let [till-path (<! (-rseek* set key-to comparator {:sync? false}))]
+          (if (path-lt path till-path)
+            ;; Valid range - start the iterator
             (async-slice-iterator iter-ch set path till-path)
-            iter-ch))))))
+            ;; Empty range - close the channel
+            (async/close! iter-ch)))
+        ;; No starting path - close the channel
+        (async/close! iter-ch))
+      iter-ch)))
 
 (defn arr-map-inplace [f arr]
   (let [len (arrays/alength arr)]
@@ -1361,17 +1366,20 @@
   "Async version of reverse slice that returns a channel with elements in reverse order"
   [^BTSet set key-from key-to comparator]
   (go
-    ;; Note: for reverse iteration, we swap the keys
-    (when-some [path (<! (-seek* set key-from comparator {:sync? false}))]
-      (let [till-path (<! (-rseek* set key-to comparator {:sync? false}))]
-        (when (path-lt path till-path)
-          ;; Start from the last element <= key-to
-          (let [iter-ch (async/chan)
-                ;; Adjust right path to last valid element
-                right-path (prev-path set till-path)]
-            (when (and right-path (path-lte path right-path))
-              (async-rslice-iterator iter-ch set path right-path)
-              iter-ch)))))))
+    (let [iter-ch (async/chan)]
+      ;; Note: for reverse iteration, we swap the keys
+      (if-some [path (<! (-seek* set key-from comparator {:sync? false}))]
+        (let [till-path (<! (-rseek* set key-to comparator {:sync? false}))]
+          (if (path-lt path till-path)
+            ;; Start from the last element <= key-to
+            (let [;; Adjust right path to last valid element
+                  right-path (prev-path set till-path)]
+              (if (and right-path (path-lte path right-path))
+                (async-rslice-iterator iter-ch set path right-path)
+                (async/close! iter-ch)))
+            (async/close! iter-ch)))
+        (async/close! iter-ch))
+      iter-ch)))
 
 (defn rslice
   "A reverse iterator for part of the set with provided boundaries.
@@ -1467,23 +1475,37 @@
           (:meta opts) uninitialized-hash (:storage opts)))
 
 (defn store-set
-  "Store the set to storage. Returns address or channel depending on sync mode.
+  "Store the set to storage. Returns map with :root-address, :shift, :count.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
   ([set] (store-set set {}))
   ([^BTSet set opts]
-   (let [storage (.-storage set)]
-     (store-node (.-root set) storage opts))))
+   (let [{:keys [sync?] :or {sync? true}} opts
+         storage (.-storage set)]
+     (async+sync sync? {go do, <! do}
+       (go
+         (let [root-addr (<! (store-node (.-root set) storage opts))]
+           {:root-address root-addr
+            :shift (.-shift set)
+            :count (.-cnt set)
+            :comparator (.-comparator set)}))))))
 
 (defn restore
-  "Restore a set from storage given root address.
+  "Restore a set from storage. 
+   Can be called with either:
+   - A root address (for backwards compatibility, requires :shift and :count in opts)
+   - A map from store-set containing :root-address, :shift, :count, :comparator
    Storage operations will use the provided opts for sync/async mode."
-  ([root-address storage] (restore root-address storage {}))
-  ([root-address storage opts]
-   (let [{:keys [sync?] :or {sync? true}} opts]
+  ([root-or-map storage] (restore root-or-map storage {}))
+  ([root-or-map storage opts]
+   (let [{:keys [sync?] :or {sync? true}} opts
+         ;; Handle both old style (root address) and new style (map from store-set)
+         root-address (if (map? root-or-map)
+                        (:root-address root-or-map)
+                        root-or-map)
+         shift (or (:shift root-or-map) (:shift opts 0))
+         cnt (or (:count root-or-map) (:count opts 0))
+         cmp (or (:comparator root-or-map) (:comparator opts) compare)]
      (async+sync sync? {go do, <! do}
                  (go
-                   (let [root (<! (-restore storage root-address))
-                         shift (:shift opts 0)
-                         cnt (:count opts 0)
-                         cmp (or (:comparator opts) compare)]
+                   (let [root (<! (-restore storage root-address))]
                      (BTSet. root shift cnt cmp nil uninitialized-hash storage)))))))

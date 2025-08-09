@@ -8,6 +8,7 @@
 
 (deftest sync-storage-integration-test
   (testing "Full integration test with sync storage - 10k elements"
+    (println "Running sync-storage-integration-test")
     (let [storage (utils/make-sync-storage)
           s0 (set/sorted-set* {:storage storage})
           n 10000
@@ -31,17 +32,17 @@
           (is (= (reverse (range 7500 7526)) (vec rslice)))))
       
       ;; Store to storage
-      (let [root-addr (set/store-set s-final)]
-        (is (some? root-addr))
+      (let [store-info (set/store-set s-final)]
+        (is (some? store-info))
+        (is (map? store-info))
+        (is (:root-address store-info))
         
         ;; Check storage size
         (let [storage-data @(:*store storage)]
           (is (> (count storage-data) 100) "Should have many nodes stored"))
         
         ;; Restore from storage
-        (let [restored (set/restore root-addr storage
-                                   {:count n
-                                    :shift (.-shift s-final)})]
+        (let [restored (set/restore store-info storage)]
           (is (= n (count restored)))
           
           ;; Verify data integrity
@@ -99,18 +100,17 @@
           (is (= 9999 (last s-final)))
           
           ;; Store to storage (async)
-          (let [root-addr (<! (set/store-set s-final {:sync? false}))]
-            (is (some? root-addr))
+          (let [store-info (<! (set/store-set s-final {:sync? false}))]
+            (is (some? store-info))
+            (is (map? store-info))
+            (is (:root-address store-info))
             
             ;; Check storage size
             (let [storage-data @(:*store storage)]
               (is (> (count storage-data) 100) "Should have many nodes stored"))
             
             ;; Restore from storage (async)
-            (let [restored (<! (set/restore root-addr storage
-                                          {:count n
-                                           :shift (.-shift s-final)
-                                           :sync? false}))]
+            (let [restored (<! (set/restore store-info storage {:sync? false}))]
               (is (= n (count restored)))
               
               ;; Verify data integrity
@@ -148,6 +148,7 @@
 
 (deftest mixed-storage-operations-test
   (testing "Mixed sync/async operations with storage"
+    (println "Running mixed-storage-operations-test")
     (let [storage (utils/make-sync-storage)
           s0 (set/sorted-set* {:storage storage})
           ;; Build a smaller set for quicker testing
@@ -155,9 +156,9 @@
           s1 (reduce set/conj s0 (shuffle (range n)))]
       
       ;; Store synchronously
-      (let [root-addr (set/store-set s1)]
+      (let [store-info (set/store-set s1)]
         ;; Restore synchronously
-        (let [restored (set/restore root-addr storage {:count n :shift (.-shift s1)})]
+        (let [restored (set/restore store-info storage)]
           
           ;; Mix of operations
           (let [s2 (-> restored
@@ -177,9 +178,9 @@
             (is (= 1001 (last s2)))
             
             ;; Store the modified set
-            (let [root-addr2 (set/store-set s2)]
+            (let [store-info2 (set/store-set s2)]
               ;; Restore and verify
-              (let [restored2 (set/restore root-addr2 storage {:count n :shift (.-shift s2)})]
+              (let [restored2 (set/restore store-info2 storage)]
                 (is (= n (count restored2)))
                 (is (= (vec s2) (vec restored2)))))))))))
 

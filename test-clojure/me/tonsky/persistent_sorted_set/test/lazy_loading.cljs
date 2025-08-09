@@ -62,14 +62,14 @@
                 _ (println "Created set with 1000 elements")
                 
                 ;; Store the set
-                root-addr (<! (set/store-set s1 {:sync? false}))
-                _ (println "Stored set, root address:" root-addr)
+                store-info (<! (set/store-set s1 {:sync? false}))
+                _ (println "Stored set, store info:" store-info)
                 
                 ;; Clear access log after storing
                 _ (reset! access-log [])
                 
                 ;; Restore the set (only root should be loaded)
-                s2 (<! (set/restore root-addr storage {:sync? false :count 1000 :shift 2}))
+                s2 (<! (set/restore store-info storage {:sync? false}))
                 restore-accesses (count (filter #(= (:op %) :restore) @access-log))
                 _ (println "After restore, loaded" restore-accesses "nodes")
                 _ (is (= 1 restore-accesses) "Should only load root node on restore")
@@ -78,7 +78,7 @@
                 _ (reset! access-log [])
                 
                 ;; Iterate over a small slice (should only load necessary nodes)
-                iter-ch (set/async-slice s2 100 110)
+                iter-ch (<! (set/async-slice s2 100 110))
                 results (atom [])]
             
             ;; Collect elements
@@ -98,7 +98,7 @@
             (reset! access-log [])
             
             ;; Iterate over a different range
-            (let [iter-ch2 (set/async-slice s2 500 510)
+            (let [iter-ch2 (<! (set/async-slice s2 500 510))
                   results2 (atom [])]
               (loop []
                 (when-let [elem (<! iter-ch2)]
@@ -114,7 +114,8 @@
             (done))
           (catch js/Error e
             (println "Error in verify-lazy-loading:" (.-message e))
-            (println "Stack:" (.-stack e))
+            (println "Stack trace:")
+            (println (.-stack e))
             (done)))))))
 
 (deftest partial-consumption-cleanup
@@ -129,13 +130,13 @@
                           (go s0)
                           (range 1000))
                 s1 (<! s1)
-                root-addr (<! (set/store-set s1 {:sync? false}))
+                store-info (<! (set/store-set s1 {:sync? false}))
                 _ (reset! access-log [])
-                s2 (<! (set/restore root-addr storage {:sync? false :count 1000 :shift 2}))
+                s2 (<! (set/restore store-info storage {:sync? false}))
                 _ (reset! access-log [])
                 
                 ;; Start iteration but only consume first 5 elements
-                iter-ch (set/async-slice s2 0 999)
+                iter-ch (<! (set/async-slice s2 0 999))
                 first-5 (atom [])]
             
             ;; Only take 5 elements
@@ -170,9 +171,9 @@
                           (go s0)
                           (range 1000))
                 s1 (<! s1)
-                root-addr (<! (set/store-set s1 {:sync? false}))
+                store-info (<! (set/store-set s1 {:sync? false}))
                 _ (reset! access-log [])
-                s2 (<! (set/restore root-addr storage {:sync? false :count 1000 :shift 2}))]
+                s2 (<! (set/restore store-info storage {:sync? false}))]
             
             ;; Clear log after restore
             (reset! access-log [])

@@ -49,8 +49,8 @@
                           (go s0)
                           (range 100))
                 s1 (<! s1)
-                root-addr (<! (set/store-set s1 {:sync? false}))
-                s2 (<! (set/restore root-addr storage {:sync? false :count 100 :shift 1}))
+                store-info (<! (set/store-set s1 {:sync? false}))
+                s2 (<! (set/restore store-info storage {:sync? false}))
                 ;; Full iteration using nil boundaries
                 iter-ch (<! (set/async-slice s2 nil nil))
                 results (atom [])]
@@ -63,7 +63,8 @@
             (is (= (vec (range 100)) @results) "Full iteration should return all elements")
             (done))
           (catch js/Error e
-            (println "Error:" (.-message e))
+            (println "Error in test:" (.-message e))
+            (println "Stack:" (.-stack e))
             (done)))))))
 
 (deftest test-async-rslice
@@ -77,8 +78,8 @@
                           (go s0)
                           (range 20))
                 s1 (<! s1)
-                root-addr (<! (set/store-set s1 {:sync? false}))
-                s2 (<! (set/restore root-addr storage {:sync? false :count 20 :shift 1}))
+                store-info (<! (set/store-set s1 {:sync? false}))
+                s2 (<! (set/restore store-info storage {:sync? false}))
                 ;; Reverse slice from 15 down to 5
                 iter-ch (<! (set/async-rslice s2 5 15))
                 results (atom [])]
@@ -92,7 +93,8 @@
                 "Reverse iteration should return elements in reverse order")
             (done))
           (catch js/Error e
-            (println "Error:" (.-message e))
+            (println "Error in test:" (.-message e))
+            (println "Stack:" (.-stack e))
             (done)))))))
 
 (deftest test-partial-consumption
@@ -106,8 +108,8 @@
                           (go s0)
                           (range 100))
                 s1 (<! s1)
-                root-addr (<! (set/store-set s1 {:sync? false}))
-                s2 (<! (set/restore root-addr storage {:sync? false :count 100 :shift 1}))
+                store-info (<! (set/store-set s1 {:sync? false}))
+                s2 (<! (set/restore store-info storage {:sync? false}))
                 iter-ch (<! (set/async-slice s2 0 99))
                 first-10 (atom [])]
             
@@ -122,7 +124,8 @@
             (is (= (vec (range 10)) @first-10) "Should get first 10 elements")
             (done))
           (catch js/Error e
-            (println "Error:" (.-message e))
+            (println "Error in test:" (.-message e))
+            (println "Stack:" (.-stack e))
             (done)))))))
 
 (deftest test-async-lookup-and-contains
@@ -136,8 +139,8 @@
                           (go s0)
                           (range 50))
                 s1 (<! s1)
-                root-addr (<! (set/store-set s1 {:sync? false}))
-                s2 (<! (set/restore root-addr storage {:sync? false :count 50 :shift 1}))]
+                store-info (<! (set/store-set s1 {:sync? false}))
+                s2 (<! (set/restore store-info storage {:sync? false}))]
             
             ;; Test lookup
             (let [found (<! (set/lookup-async s2 25))
@@ -153,7 +156,8 @@
             
             (done))
           (catch js/Error e
-            (println "Error:" (.-message e))
+            (println "Error in test:" (.-message e))
+            (println "Stack:" (.-stack e))
             (done)))))))
 
 (deftest test-empty-and-edge-cases
@@ -164,8 +168,8 @@
           ;; Empty set
           (let [storage (->TestAsyncStorage 5 (atom {}))
                 s0 (set/sorted-set* {:storage storage})
-                root-addr (<! (set/store-set s0 {:sync? false}))
-                s1 (<! (set/restore root-addr storage {:sync? false :count 0 :shift 0}))
+                store-info (<! (set/store-set s0 {:sync? false}))
+                s1 (<! (set/restore store-info storage {:sync? false}))
                 iter-ch (<! (set/async-slice s1 nil nil))
                 results (atom [])]
 
@@ -180,8 +184,8 @@
           (let [storage (->TestAsyncStorage 5 (atom {}))
                 s0 (set/sorted-set* {:storage storage})
                 s1 (<! (set/conj s0 42 compare {:sync? false}))
-                root-addr (<! (set/store-set s1 {:sync? false}))
-                s2 (<! (set/restore root-addr storage {:sync? false :count 1 :shift 0}))
+                store-info (<! (set/store-set s1 {:sync? false}))
+                s2 (<! (set/restore store-info storage {:sync? false}))
                 iter-ch (<! (set/async-slice s2 nil nil))
                 results (atom [])]
 
@@ -199,8 +203,8 @@
                            (go s0)
                            (range 10))
                 s1 (<! s1)
-                root-addr (<! (set/store-set s1 {:sync? false}))
-                s2 (<! (set/restore root-addr storage {:sync? false :count 10 :shift 0}))
+                store-info (<! (set/store-set s1 {:sync? false}))
+                s2 (<! (set/restore store-info storage {:sync? false}))
                 iter-ch (<! (set/async-slice s2 20 30))
                 results (atom [])]
 
@@ -215,7 +219,8 @@
 
           (done)
           (catch js/Error e
-            (println "Error:" (.-message e))
+            (println "Error in test:" (.-message e))
+            (println "Stack:" (.-stack e))
             (done)))))))
 
 (cljs.test/run-tests)
