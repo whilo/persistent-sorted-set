@@ -1225,43 +1225,30 @@
   "Store a node recursively. Returns address or channel depending on sync mode."
   [node storage opts]
   (let [{:keys [sync?] :or {sync? true}} opts]
-    (cond
-      ;; Leaf node - just store it
-      (instance? Leaf node)
-      (if sync?
-        (-store storage node nil)
-        (go 
-          (let [addr (<! (-store storage node nil))]
-            addr)))
-      
-      ;; Branch node - store children first
-      (instance? Node node)
-      (if sync?
-        ;; Synchronous path
-        (let [children (.-pointers node)
-              addresses (arrays/make-array (arrays/alength children))]
-          (dotimes [i (arrays/alength children)]
-            (let [child (arrays/aget children i)
-                  addr (store-node child storage opts)]
-              (arrays/aset addresses i addr)))
-          ;; Then store this node with addresses
-          (let [node-with-addresses (Node. (.-keys node) nil addresses nil)]
-            (-store storage node-with-addresses nil)))
-        ;; Asynchronous path
-        (go
-          (let [children (.-pointers node)
-                addresses (arrays/make-array (arrays/alength children))]
-            (dotimes [i (arrays/alength children)]
-              (let [child (arrays/aget children i)
-                    addr (<! (store-node child storage opts))]
-                (arrays/aset addresses i addr)))
-            ;; Then store this node with addresses
-            (let [node-with-addresses (Node. (.-keys node) nil addresses nil)
-                  final-addr (<! (-store storage node-with-addresses nil))]
-              final-addr))))
-      
-      :else
-      (throw (ex-info "Unknown node type" {:node node :type (type node)})))))
+  (async+sync sync? {go do, <! do}
+              (cond
+                ;; Leaf node - just store it
+                (instance? Leaf node)
+                (go
+                  (let [addr (<! (-store storage node nil))]
+                    addr))
+
+                ;; Branch node - store children first
+                (instance? Node node)
+                (go
+                  (let [children (.-pointers node)
+                        addresses (arrays/make-array (arrays/alength children))]
+                    (dotimes [i (arrays/alength children)]
+                      (let [child (arrays/aget children i)
+                            addr (<! (store-node child storage opts))]
+                        (arrays/aset addresses i addr)))
+                    ;; Then store this node with addresses
+                    (let [node-with-addresses (Node. (.-keys node) nil addresses nil)
+                          final-addr (<! (-store storage node-with-addresses nil))]
+                      final-addr)))
+
+                :else
+                (throw (ex-info "Unknown node type" {:node node :type (type node)}))))))
 
 ;; Public interface
 
@@ -1272,52 +1259,29 @@
   ([^BTSet set key cmp] (conj set key cmp {}))
   ([^BTSet set key cmp opts]
    (let [{:keys [sync?] :or {sync? true}} opts]
-     (if sync?
-       ;; Synchronous path - no go block at all
-       (let [roots (node-conj (.-root set) cmp key (.-storage set) opts)]
-         (cond
-           ;; tree not changed
-           (nil? roots)
-           set
+     (async+sync sync? {go do, <! do}
+                 (go
+                   (let [roots (<! (node-conj (.-root set) cmp key (.-storage set) opts))]
+                     (cond
+                       ;; tree not changed
+                       (nil? roots)
+                       set
 
-           ;; keeping single root
-           (== (arrays/alength roots) 1)
-           (alter-btset set
-                        (arrays/aget roots 0)
-                        (.-shift set)
-                        (inc (.-cnt set))
-                        cmp)
+                       ;; keeping single root
+                       (== (arrays/alength roots) 1)
+                       (alter-btset set
+                                    (arrays/aget roots 0)
+                                    (.-shift set)
+                                    (inc (.-cnt set))
+                                    cmp)
 
-           ;; introducing new root
-           :else
-           (alter-btset set
-                        (Node. (arrays/amap node-lim-key roots) roots nil nil)
-                        (inc (.-shift set))
-                        (inc (.-cnt set))
-                        cmp)))
-       ;; Asynchronous path - with go block
-       (go
-         (let [roots (<! (node-conj (.-root set) cmp key (.-storage set) opts))]
-           (cond
-             ;; tree not changed
-             (nil? roots)
-             set
-
-             ;; keeping single root
-             (== (arrays/alength roots) 1)
-             (alter-btset set
-                          (arrays/aget roots 0)
-                          (.-shift set)
-                          (inc (.-cnt set))
-                          cmp)
-
-             ;; introducing new root
-             :else
-             (alter-btset set
-                          (Node. (arrays/amap node-lim-key roots) roots nil nil)
-                          (inc (.-shift set))
-                          (inc (.-cnt set))
-                          cmp))))))))
+                       ;; introducing new root
+                       :else
+                       (alter-btset set
+                                    (Node. (arrays/amap node-lim-key roots) roots nil nil)
+                                    (inc (.-shift set))
+                                    (inc (.-cnt set))
+                                    cmp))))))))
 
 (defn disj
   "Analogue to [[clojure.core/disj]] with comparator that overrides the one stored in set.
@@ -1507,8 +1471,7 @@
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
   ([set] (store-set set {}))
   ([^BTSet set opts]
-   (let [{:keys [sync?] :or {sync? true}} opts
-         storage (.-storage set)]
+   (let [storage (.-storage set)]
      (store-node (.-root set) storage opts))))
 
 (defn restore
