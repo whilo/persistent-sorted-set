@@ -267,7 +267,7 @@
 (defprotocol INode
   (node-lim-key       [_])
   (node-len           [_])
-  (node-merge         [_ next storage opts])
+  (node-merge         [_ next])
   (node-merge-n-split [_ next])
   (node-lookup        [_ cmp key storage opts])
   (node-conj          [_ cmp key storage opts])
@@ -275,37 +275,34 @@
 
 (declare Node Leaf ensure-child)
 
-(defn- rotate [node root? left right storage opts]
-  (let [{:keys [sync?] :or {sync? true}} opts]
-    (async+sync sync? {go do, <! do}
-      (go
-        (cond
-          ;; root never merges
-          root?
-          (return-array node)
+(defn- rotate [node root? left right]
+  (cond
+    ;; root never merges
+    root?
+    (return-array node)
 
-          ;; enough keys, nothing to merge
-          (> (node-len node) min-len)
-          (return-array left node right)
+    ;; enough keys, nothing to merge
+    (> (node-len node) min-len)
+    (return-array left node right)
 
-          ;; left and this can be merged to one
-          (and left (<= (node-len left) min-len))
-          (return-array (<! (node-merge left node storage opts)) right)
+    ;; left and this can be merged to one
+    (and left (<= (node-len left) min-len))
+    (return-array (node-merge left node) right)
 
-          ;; right and this can be merged to one
-          (and right (<= (node-len right) min-len))
-          (return-array left (<! (node-merge node right storage opts)))
+    ;; right and this can be merged to one
+    (and right (<= (node-len right) min-len))
+    (return-array left (node-merge node right))
 
-          ;; left has fewer nodes, redestribute with it
-          (and left (or (nil? right)
-                        (< (node-len left) (node-len right))))
-          (let [nodes (node-merge-n-split left node)]
-            (return-array (arrays/aget nodes 0) (arrays/aget nodes 1) right))
+    ;; left has fewer nodes, redestribute with it
+    (and left (or (nil? right)
+                  (< (node-len left) (node-len right))))
+    (let [nodes (node-merge-n-split left node)]
+      (return-array (arrays/aget nodes 0) (arrays/aget nodes 1) right))
 
-          ;; right has fewer nodes, redestribute with it
-          :else
-          (let [nodes (node-merge-n-split node right)]
-            (return-array left (arrays/aget nodes 0) (arrays/aget nodes 1))))))))
+    ;; right has fewer nodes, redestribute with it
+    :else
+    (let [nodes (node-merge-n-split node right)]
+      (return-array left (arrays/aget nodes 0) (arrays/aget nodes 1)))))
 
 (deftype Node [keys ^:mutable pointers ^:mutable addresses ^:mutable _hash]
   Object
@@ -314,68 +311,65 @@
   INode
   (node-lim-key [_]
     (arrays/alast keys))
-    
+
   (node-len [_]
     (arrays/alength keys))
-    
-  (node-merge [_ next storage opts]
-    (let [{:keys [sync?] :or {sync? true}} opts]
-      (async+sync sync? {go do, <! do}
-        (go
-          (Node. (arrays/aconcat keys (.-keys next))
-                 (arrays/aconcat pointers (.-pointers next))
-                 nil nil)))))
-                
+
+  (node-merge [_ next]
+    (Node. (arrays/aconcat keys (.-keys next))
+           (arrays/aconcat pointers (.-pointers next))
+           nil nil))
+
   (node-merge-n-split [_ next]
     (let [ks (merge-n-split keys     (.-keys next))
           ps (merge-n-split pointers (.-pointers next))]
       (return-array
-        (Node. (arrays/aget ks 0) (arrays/aget ps 0) nil nil)
-        (Node. (arrays/aget ks 1) (arrays/aget ps 1) nil nil))))
-    
+       (Node. (arrays/aget ks 0) (arrays/aget ps 0) nil nil)
+       (Node. (arrays/aget ks 1) (arrays/aget ps 1) nil nil))))
+
   (node-lookup [this cmp key storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
           idx (lookup-range cmp keys key)]
       (async+sync sync? {go do, <! do}
-        (go
-          (when-not (== -1 idx)
-            (let [child-node (<! (ensure-child this idx storage opts))]
-              (<! (node-lookup child-node cmp key storage opts))))))))
-    
+                  (go
+                    (when-not (== -1 idx)
+                      (let [child-node (<! (ensure-child this idx storage opts))]
+                        (<! (node-lookup child-node cmp key storage opts))))))))
+
   (node-conj [this cmp key storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
           idx   (binary-search-l cmp keys (- (arrays/alength keys) 2) key)]
       (async+sync sync? {go do, <! do}
-        (go
-          (let [child-node (<! (ensure-child this idx storage opts))]
-            (when-let [nodes (<! (node-conj child-node cmp key storage opts))]
-              (let [new-keys     (check-n-splice cmp keys     idx (inc idx) (arrays/amap node-lim-key nodes))
-                    new-pointers (splice             pointers idx (inc idx) nodes)]
-                (if (<= (arrays/alength new-pointers) max-len)
-                  ;; ok as is
-                  (arrays/array (Node. new-keys new-pointers nil nil))
-                  ;; gotta split it up
-                  (let [middle (arrays/half (arrays/alength new-pointers))]
-                    (arrays/array
-                     (Node. (.slice new-keys     0 middle) (.slice new-pointers 0 middle) nil nil)
-                     (Node. (.slice new-keys     middle)   (.slice new-pointers middle)   nil nil)))))))))))
-    
+                  (go
+                    (let [child-node (<! (ensure-child this idx storage opts))]
+                      (when-let [nodes (<! (node-conj child-node cmp key storage opts))]
+                        (let [new-keys     (check-n-splice cmp keys     idx (inc idx) (arrays/amap node-lim-key nodes))
+                              new-pointers (splice             pointers idx (inc idx) nodes)]
+                          (if (<= (arrays/alength new-pointers) max-len)
+                            ;; ok as is
+                            (arrays/array (Node. new-keys new-pointers nil nil))
+                            ;; gotta split it up
+                            (let [middle (arrays/half (arrays/alength new-pointers))]
+                              (arrays/array
+                               (Node. (.slice new-keys     0 middle) (.slice new-pointers 0 middle) nil nil)
+                               (Node. (.slice new-keys     middle)   (.slice new-pointers middle)   nil nil)))))))))))
+
   (node-disj [this cmp key root? left right storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
           idx (lookup-range cmp keys key)]
       (async+sync sync? {go do, <! do}
-        (go
-          (when-not (== -1 idx) ;; short-circuit, key not here
-            (let [child       (<! (ensure-child this idx storage opts))
-                  left-child  (when (>= (dec idx) 0)          (<! (ensure-child this (dec idx) storage opts)))
-                  right-child (when (< (inc idx) (arrays/alength pointers)) (<! (ensure-child this (inc idx) storage opts)))
-                  disjned     (<! (node-disj child cmp key false left-child right-child storage opts))]
-              (when disjned     ;; short-circuit, key not here
-                (let [left-idx     (if left-child  (dec idx) idx)
-                      right-idx    (if right-child (+ 2 idx) (+ 1 idx))
-                      new-keys     (check-n-splice cmp keys     left-idx right-idx (arrays/amap node-lim-key disjned))
-                      new-pointers (splice             pointers left-idx right-idx disjned)]
-                  (<! (rotate (Node. new-keys new-pointers nil nil) root? left right storage opts)))))))))))
+                  (go
+                    (when-not (== -1 idx) ;; short-circuit, key not here
+                      (let [child       (<! (ensure-child this idx storage opts))
+                            left-child  (when (>= (dec idx) 0)          (<! (ensure-child this (dec idx) storage opts)))
+                            right-child (when (< (inc idx) (arrays/alength pointers)) (<! (ensure-child this (inc idx) storage opts)))
+                            disjned     (<! (node-disj child cmp key false left-child right-child storage opts))]
+                        (when disjned     ;; short-circuit, key not here
+                          (let [left-idx     (if left-child  (dec idx) idx)
+                                right-idx    (if right-child (+ 2 idx) (+ 1 idx))
+                                new-keys     (check-n-splice cmp keys     left-idx right-idx (arrays/amap node-lim-key disjned))
+                                new-pointers (splice             pointers left-idx right-idx disjned)]
+                            (rotate (Node. new-keys new-pointers nil nil) root? left right))))))))))
 
 (deftype Leaf [keys ^:mutable _hash]
   Object
@@ -384,22 +378,18 @@
   INode
   (node-lim-key [_]
     (arrays/alast keys))
-    
+
   (node-len [_]
     (arrays/alength keys))
-    
-  (node-merge [_ next storage opts]
-    (let [{:keys [sync?] :or {sync? true}} opts
-          result (Leaf. (arrays/aconcat keys (.-keys next)) nil)]
-      (if sync?
-        result
-        (go result))))
-    
+
+  (node-merge [_ next]
+    (Leaf. (arrays/aconcat keys (.-keys next)) nil))
+
   (node-merge-n-split [_ next]
     (let [ks (merge-n-split keys (.-keys next))]
       (return-array (Leaf. (arrays/aget ks 0) nil)
                     (Leaf. (arrays/aget ks 1) nil))))
-    
+
   (node-lookup [_ cmp key storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
           idx (lookup-exact cmp keys key)
@@ -408,7 +398,7 @@
       (if sync?
         result
         (go result))))
-    
+
   (node-conj [_ cmp key storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
           idx    (binary-search-l cmp keys (dec (arrays/alength keys)) key)
@@ -438,15 +428,15 @@
       (if sync?
         result
         (go result))))
-    
+
   (node-disj [_ cmp key root? left right storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
           idx (lookup-exact cmp keys key)]
       (async+sync sync? {go do, <! do}
-        (go
-          (when-not (== -1 idx) ;; key is here
-            (let [new-keys (splice keys idx (inc idx) (arrays/array))]
-              (<! (rotate (Leaf. new-keys nil) root? left right storage opts)))))))))
+                  (go
+                    (when-not (== -1 idx) ;; key is here
+                      (let [new-keys (splice keys idx (inc idx) (arrays/array))]
+                        (rotate (Leaf. new-keys nil) root? left right))))))))
 
 ;; BTSet
 
@@ -1138,17 +1128,12 @@
   "Async version of slice that returns a channel with elements"
   [^BTSet set key-from key-to comparator]
   (go
-    (let [iter-ch (async/chan)]
-      (if-some [path (<! (-seek* set key-from comparator {:sync? false}))]
-        (let [till-path (<! (-rseek* set key-to comparator {:sync? false}))]
-          (if (path-lt path till-path)
-            ;; Valid range - start the iterator
+    (when-some [path (<! (-seek* set key-from comparator {:sync? false}))]
+      (let [till-path (<! (-rseek* set key-to comparator {:sync? false}))]
+        (when (path-lt path till-path)
+          (let [iter-ch (async/chan)]
             (async-slice-iterator iter-ch set path till-path)
-            ;; Empty range - close the channel
-            (async/close! iter-ch)))
-        ;; No starting path - close the channel
-        (async/close! iter-ch))
-      iter-ch)))
+            iter-ch))))))
 
 (defn arr-map-inplace [f arr]
   (let [len (arrays/alength arr)]
@@ -1366,20 +1351,17 @@
   "Async version of reverse slice that returns a channel with elements in reverse order"
   [^BTSet set key-from key-to comparator]
   (go
-    (let [iter-ch (async/chan)]
-      ;; Note: for reverse iteration, we swap the keys
-      (if-some [path (<! (-seek* set key-from comparator {:sync? false}))]
-        (let [till-path (<! (-rseek* set key-to comparator {:sync? false}))]
-          (if (path-lt path till-path)
-            ;; Start from the last element <= key-to
-            (let [;; Adjust right path to last valid element
-                  right-path (prev-path set till-path)]
-              (if (and right-path (path-lte path right-path))
-                (async-rslice-iterator iter-ch set path right-path)
-                (async/close! iter-ch)))
-            (async/close! iter-ch)))
-        (async/close! iter-ch))
-      iter-ch)))
+    ;; Note: for reverse iteration, we swap the keys
+    (when-some [path (<! (-seek* set key-from comparator {:sync? false}))]
+      (let [till-path (<! (-rseek* set key-to comparator {:sync? false}))]
+        (when (path-lt path till-path)
+          ;; Start from the last element <= key-to
+          (let [iter-ch (async/chan)
+                ;; Adjust right path to last valid element
+                right-path (prev-path set till-path)]
+            (when (and right-path (path-lte path right-path))
+              (async-rslice-iterator iter-ch set path right-path)
+              iter-ch)))))))
 
 (defn rslice
   "A reverse iterator for part of the set with provided boundaries.
@@ -1475,37 +1457,23 @@
           (:meta opts) uninitialized-hash (:storage opts)))
 
 (defn store-set
-  "Store the set to storage. Returns map with :root-address, :shift, :count.
+  "Store the set to storage. Returns address or channel depending on sync mode.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
   ([set] (store-set set {}))
   ([^BTSet set opts]
-   (let [{:keys [sync?] :or {sync? true}} opts
-         storage (.-storage set)]
-     (async+sync sync? {go do, <! do}
-       (go
-         (let [root-addr (<! (store-node (.-root set) storage opts))]
-           {:root-address root-addr
-            :shift (.-shift set)
-            :count (.-cnt set)
-            :comparator (.-comparator set)}))))))
+   (let [storage (.-storage set)]
+     (store-node (.-root set) storage opts))))
 
 (defn restore
-  "Restore a set from storage. 
-   Can be called with either:
-   - A root address (for backwards compatibility, requires :shift and :count in opts)
-   - A map from store-set containing :root-address, :shift, :count, :comparator
+  "Restore a set from storage given root address.
    Storage operations will use the provided opts for sync/async mode."
-  ([root-or-map storage] (restore root-or-map storage {}))
-  ([root-or-map storage opts]
-   (let [{:keys [sync?] :or {sync? true}} opts
-         ;; Handle both old style (root address) and new style (map from store-set)
-         root-address (if (map? root-or-map)
-                        (:root-address root-or-map)
-                        root-or-map)
-         shift (or (:shift root-or-map) (:shift opts 0))
-         cnt (or (:count root-or-map) (:count opts 0))
-         cmp (or (:comparator root-or-map) (:comparator opts) compare)]
+  ([root-address storage] (restore root-address storage {}))
+  ([root-address storage opts]
+   (let [{:keys [sync?] :or {sync? true}} opts]
      (async+sync sync? {go do, <! do}
                  (go
-                   (let [root (<! (-restore storage root-address))]
+                   (let [root (<! (-restore storage root-address))
+                         shift (:shift opts 0)
+                         cnt (:count opts 0)
+                         cmp (or (:comparator opts) compare)]
                      (BTSet. root shift cnt cmp nil uninitialized-hash storage)))))))
