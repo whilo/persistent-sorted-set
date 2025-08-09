@@ -86,4 +86,16 @@
   {:target           :node-test
    :output-to        "target/large-async-only.js"
    :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.large-async-only"
+   :compiler-options {:infer-externs true}}
+   
+  :debug-conj-issue
+  {:target           :node-test
+   :output-to        "target/debug-conj-issue.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.debug-conj-issue"
+   :compiler-options {:infer-externs true}}
+   
+  :core-test
+  {:target           :node-test
+   :output-to        "target/core-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.(core|small|stress)"
    :compiler-options {:infer-externs true}}}}
