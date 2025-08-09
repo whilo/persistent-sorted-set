@@ -20,7 +20,14 @@
       (is (= 2 (count s2)))
       (is (= 3 (count s3)))
       
-      (is (= [1 2 3] (vec s3)))
+      (println "About to vec s3, type:" (type s3))
+      (println "s3 root:" (.-root s3))
+      (try
+        (is (= [1 2 3] (vec s3)))
+        (catch js/Error e
+          (println "Error in vec:" (.-message e))
+          (println "Stack:" (.-stack e))
+          (throw e)))
       (is (contains? s3 2))
       (is (not (contains? s3 4)))
       

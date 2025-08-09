@@ -38,4 +38,52 @@
   {:target           :node-test
    :output-to        "target/sync-only-test.js"
    :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.sync-only"
+   :compiler-options {:infer-externs true}}
+   
+  :minimal
+  {:target           :node-test
+   :output-to        "target/minimal-storage-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.minimal-storage"
+   :compiler-options {:infer-externs true}}
+   
+  :async-iteration-test
+  {:target           :node-test
+   :output-to        "target/async-iteration-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.async-iteration"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-async-test
+  {:target           :node-test
+   :output-to        "target/simple-async-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.simple-async-test"
+   :compiler-options {:infer-externs true}}
+   
+  :debug-arities
+  {:target           :node-test
+   :output-to        "target/debug-arities.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.debug-arities"
+   :compiler-options {:infer-externs true}}
+   
+  :test-fix
+  {:target           :node-script
+   :main             test-fix/init
+   :output-to        "test-fix.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-minimal
+  {:target           :node-script
+   :main             test-minimal/-main
+   :output-to        "test-minimal.js"
+   :compiler-options {:infer-externs true}}
+   
+  :run-large-set-test
+  {:target           :node-script
+   :main             run-large-set-test/-main
+   :output-to        "run-large-set-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :large-async-only
+  {:target           :node-test
+   :output-to        "target/large-async-only.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.large-async-only"
    :compiler-options {:infer-externs true}}}}
