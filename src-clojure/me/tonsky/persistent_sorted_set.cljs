@@ -273,7 +273,7 @@
   (node-conj          [_ cmp key storage opts])
   (node-disj          [_ cmp key root? left right storage opts]))
 
-(declare Node Leaf child)
+(declare Node Leaf ensure-child)
 
 (defn- rotate [node root? left right storage opts]
   (let [{:keys [sync?] :or {sync? true}} opts]
@@ -339,7 +339,7 @@
       (async+sync sync? {go do, <! do}
         (go
           (when-not (== -1 idx)
-            (let [child-node (<! (child this idx storage opts))]
+            (let [child-node (<! (ensure-child this idx storage opts))]
               (<! (node-lookup child-node cmp key storage opts))))))))
     
   (node-conj [this cmp key storage opts]
@@ -347,7 +347,7 @@
           idx   (binary-search-l cmp keys (- (arrays/alength keys) 2) key)]
       (async+sync sync? {go do, <! do}
         (go
-          (let [child-node (<! (child this idx storage opts))]
+          (let [child-node (<! (ensure-child this idx storage opts))]
             (when-let [nodes (<! (node-conj child-node cmp key storage opts))]
               (let [new-keys     (check-n-splice cmp keys     idx (inc idx) (arrays/amap node-lim-key nodes))
                     new-pointers (splice             pointers idx (inc idx) nodes)]
@@ -366,9 +366,9 @@
       (async+sync sync? {go do, <! do}
         (go
           (when-not (== -1 idx) ;; short-circuit, key not here
-            (let [child       (<! (child this idx storage opts))
-                  left-child  (when (>= (dec idx) 0)          (<! (child this (dec idx) storage opts)))
-                  right-child (when (< (inc idx) (arrays/alength pointers)) (<! (child this (inc idx) storage opts)))
+            (let [child       (<! (ensure-child this idx storage opts))
+                  left-child  (when (>= (dec idx) 0)          (<! (ensure-child this (dec idx) storage opts)))
+                  right-child (when (< (inc idx) (arrays/alength pointers)) (<! (ensure-child this (inc idx) storage opts)))
                   disjned     (<! (node-disj child cmp key false left-child right-child storage opts))]
               (when disjned     ;; short-circuit, key not here
                 (let [left-idx     (if left-child  (dec idx) idx)
@@ -536,9 +536,7 @@
   (-pr-writer [this writer opts]
     (pr-sequential-writer writer pr-writer "#{" " " "}" opts (seq this))))
 
-(declare child-sync child-async)
-
-(defn- child 
+(defn- ensure-child 
   "Get child at index, with lazy restoration if needed. 
    When storage is provided, supports lazy restoration.
    In sync mode returns child directly, in async mode returns channel."
@@ -548,40 +546,22 @@
      (arrays/aget (.-pointers node) idx)))
   ([node idx storage opts]
    (let [{:keys [sync?] :or {sync? true}} opts]
-     (if sync?
-       (child-sync node idx storage)
-       (child-async node idx storage)))))
+     (async+sync sync? {go do, <! do}
+                 (go
+                   (when (instance? Node node)
+                     ;; Initialize pointers array if needed
+                     (when (nil? (.-pointers node))
+                       (set! (.-pointers node) (arrays/make-array (arrays/alength (.-addresses node)))))
 
-(defn- child-sync [node idx storage]
-  (when (instance? Node node)
-    ;; Initialize pointers array if needed
-    (when (nil? (.-pointers node))
-      (set! (.-pointers node) (arrays/make-array (arrays/alength (.-addresses node)))))
-    
-    (if-let [child (arrays/aget (.-pointers node) idx)]
-      child
-      ;; Lazy restoration from storage
-      (when-let [addresses (.-addresses node)]
-        (when-let [addr (arrays/aget addresses idx)]
-          (let [child (-restore storage addr)]
-            (arrays/aset (.-pointers node) idx child)
-            child))))))
+                     (if-let [child (arrays/aget (.-pointers node) idx)]
+                       child
+                       ;; Lazy restoration from storage
+                       (when-let [addresses (.-addresses node)]
+                         (when-let [addr (arrays/aget addresses idx)]
+                           (let [child (<! (-restore storage addr))]
+                             (arrays/aset (.-pointers node) idx child)
+                             child))))))))))
 
-(defn- child-async [node idx storage]
-  (go
-    (when (instance? Node node)
-      ;; Initialize pointers array if needed
-      (when (nil? (.-pointers node))
-        (set! (.-pointers node) (arrays/make-array (arrays/alength (.-addresses node)))))
-      
-      (if-let [child (arrays/aget (.-pointers node) idx)]
-        child
-        ;; Lazy restoration from storage
-        (when-let [addresses (.-addresses node)]
-          (when-let [addr (arrays/aget addresses idx)]
-            (let [child (<! (-restore storage addr))]
-              (arrays/aset (.-pointers node) idx child)
-              child)))))))
 
 (defn- keys-for 
   "Returns keys array for the leaf node at the given path.
@@ -598,8 +578,8 @@
              (recur
               (dec level)
               (if (.-storage set)
-                (<! (child node (path-get path level) (.-storage set) opts))
-                (child node (path-get path level))))
+                (<! (ensure-child node (path-get path level) (.-storage set) opts))
+                (ensure-child node (path-get path level))))
              (.-keys node))))))))
 
 
@@ -623,8 +603,8 @@
          (if (pos? level)
            ;; inner node
            (let [child-node (if (.-storage set)
-                             (<! (child node idx (.-storage set) opts))
-                             (child node idx))
+                             (<! (ensure-child node idx (.-storage set) opts))
+                             (ensure-child node idx))
                  sub-path (<! (-next-path set child-node path (dec level) opts))]
              (if (nil? sub-path)
                ;; nested node overflow
@@ -667,7 +647,7 @@
          (if (pos? level)
            ;; inner node
            (let [last-idx (dec (node-len node))
-                 child-node (<! (child node last-idx storage opts))]
+                 child-node (<! (ensure-child node last-idx storage opts))]
              (<! (-rpath child-node
                          (path-set path level last-idx)
                          (dec level)
@@ -728,8 +708,8 @@
 
            :else
            (let [child-node (if (.-storage set)
-                             (<! (child node idx (.-storage set) opts))
-                             (child node idx))
+                             (<! (ensure-child node idx (.-storage set) opts))
+                             (ensure-child node idx))
                  path' (<! (-prev-path set child-node path (dec level) opts))]
              (cond
                ;; no sub-overflow, keep current idx
@@ -743,8 +723,8 @@
                ;; nested overflow, advance current idx, reset subsequent indexes
                :else
                (let [child-node (if (.-storage set)
-                                 (<! (child node (dec idx) (.-storage set) opts))
-                                 (child node (dec idx)))
+                                 (<! (ensure-child node (dec idx) (.-storage set) opts))
+                                 (ensure-child node (dec idx)))
                      path' (if (.-storage set)
                              (<! (-rpath child-node path (dec level) (.-storage set) opts))
                              (-rpath child-node path (dec level)))]
@@ -1026,8 +1006,8 @@
       ;; inner node
       (if (== idx-l idx-r)
         (-distance set (if (.-storage set)
-                          (child node idx-l (.-storage set) {:sync? true})
-                          (child node idx-l)) left right (dec level))
+                          (ensure-child node idx-l (.-storage set) {:sync? true})
+                          (ensure-child node idx-l)) left right (dec level))
         (loop [level level
                res   (- idx-r idx-l)]
           (if (== 0 level)
@@ -1079,8 +1059,8 @@
                  (let [keys (.-keys node)
                        idx  (binary-search-l comparator keys (- keys-l 2) key)
                        child-node (if (.-storage set)
-                                    (<! (child node idx (.-storage set) opts))
-                                    (child node idx))]
+                                    (<! (ensure-child node idx (.-storage set) opts))
+                                    (ensure-child node idx))]
                    (recur
                     child-node
                     (path-set path level idx)
@@ -1114,8 +1094,8 @@
                        idx  (binary-search-r comparator keys (- keys-l 2) key)
                        res  (path-set path level idx)
                        child-node (if (.-storage set)
-                                    (<! (child node idx (.-storage set) opts))
-                                    (child node idx))]
+                                    (<! (ensure-child node idx (.-storage set) opts))
+                                    (ensure-child node idx))]
                    (recur
                     child-node
                     res
