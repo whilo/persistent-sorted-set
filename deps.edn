@@ -1,6 +1,7 @@
 {:paths ["src-clojure" "target/classes"]
  :deps
- {org.clojure/clojure {:mvn/version "1.11.1"}}
+ {org.clojure/clojure {:mvn/version "1.11.1"}
+  missionary/missionary {:mvn/version "b.46"}}
  :aliases
  {:dev
   {:extra-deps

@@ -2,9 +2,12 @@
   "Comprehensive integration tests for storage with both sync and async implementations"
   (:require
    [cljs.test :refer-macros [deftest testing is async]]
-   [cljs.core.async :as async :refer [go <!]]
+   #_[cljs.core.async :as async :refer [sp ?]]
+   [missionary.core :refer [sp] :as m]
    [me.tonsky.persistent-sorted-set :as set]
-   [me.tonsky.persistent-sorted-set.async-utils :as utils]))
+   [me.tonsky.persistent-sorted-set.async-utils :as utils])
+  (:require-macros 
+   [missionary.core :refer [?]]))
 
 (deftest sync-storage-integration-test
   (testing "Full integration test with sync storage - 10k elements"
@@ -79,8 +82,9 @@
 
 (deftest async-storage-integration-test
   (async done
-    (go
-      (testing "Full integration test with async storage - 10k elements"
+    ;; Execute the missionary process
+    ((sp
+       (testing "Full integration test with async storage - 10k elements"
         (let [storage (utils/make-async-storage 1) ; 1ms delay to simulate async
               s0 (set/sorted-set* {:storage storage})
               n 10000
@@ -90,7 +94,7 @@
                             remaining nums]
                        (if (empty? remaining)
                          s
-                         (recur (<! (set/conj s (first remaining) compare {:sync? false}))
+                         (recur (? (set/conj s (first remaining) compare {:sync? false}))
                                 (rest remaining))))]
           
           (is (= n (count s-final)))
@@ -100,7 +104,7 @@
           (is (= 9999 (last s-final)))
           
           ;; Store to storage (async)
-          (let [store-info (<! (set/store-set s-final {:sync? false}))]
+          (let [store-info (? (set/store-set s-final {:sync? false}))]
             (is (some? store-info))
             (is (map? store-info))
             (is (:root-address store-info))
@@ -110,7 +114,7 @@
               (is (> (count storage-data) 100) "Should have many nodes stored"))
             
             ;; Restore from storage (async)
-            (let [restored (<! (set/restore store-info storage {:sync? false}))]
+            (let [restored (? (set/restore store-info storage {:sync? false}))]
               (is (= n (count restored)))
               
               ;; Verify data integrity
@@ -119,32 +123,33 @@
               
               ;; Test async operations on restored set
               (testing "async conj on restored set"
-                (let [restored-with-new (<! (set/conj restored 10000 compare {:sync? false}))]
+                (let [restored-with-new (? (set/conj restored 10000 compare {:sync? false}))]
                   (is (= (inc n) (count restored-with-new)))
                   (is (contains? restored-with-new 10000))))
               
               ;; Test async disj from restored set
               (testing "async disj on restored set"
-                (let [restored-without (<! (set/disj restored 5000 compare {:sync? false}))]
+                (let [restored-without (? (set/disj restored 5000 compare {:sync? false}))]
                   (is (= (dec n) (count restored-without)))
                   (is (not (contains? restored-without 5000)))))
               
               ;; Test async lookup
               (testing "async lookup on restored set"
-                (is (= 5000 (<! (set/lookup-async restored 5000))))
-                (is (nil? (<! (set/lookup-async restored 10001))))
-                (is (true? (<! (set/contains-async? restored 5000))))
-                (is (false? (<! (set/contains-async? restored 10001)))))
+                (is (= 5000 (? (set/lookup-async restored 5000))))
+                (is (nil? (? (set/lookup-async restored 10001))))
+                (is (true? (? (set/contains-async? restored 5000))))
+                (is (false? (? (set/contains-async? restored 10001)))))
               
               ;; Test async slicing
               (testing "async slicing on restored set"
-                (let [slice-ch (<! (set/async-slice restored 100 199))
-                      slice-items (loop [items []]
-                                   (if-let [item (<! slice-ch)]
-                                     (recur (conj items item))
-                                     items))]
-                  (is (= (range 100 200) slice-items))))))))
-      (done))))
+                (let [slice-flow (? (set/-async-slice restored 100 199 compare))
+                      slice-items (? (m/reduce conj [] slice-flow))]
+                  (is (= (range 100 200) slice-items) "Should have all items in range"))))))
+       (done)))
+     (fn [result] (println "Async test completed with result:" result))
+     (fn [error] 
+       (println "Async test failed with error:" (str error))
+       (done)))))
 
 (deftest mixed-storage-operations-test
   (testing "Mixed sync/async operations with storage"

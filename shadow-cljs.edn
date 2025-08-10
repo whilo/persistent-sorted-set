@@ -1,7 +1,9 @@
 {:source-paths ["src-clojure" "test-clojure" "bench-clojure"]
  
  :dependencies
- [[org.clojure/core.async "1.8.741"]]
+ [[org.clojure/core.async "1.8.741"]
+  [missionary/missionary "b.47-SNAPSHOT"]
+  [cloroutine "11"]]
  
  :builds
  {:bench
@@ -19,7 +21,13 @@
   :async-test
   {:target           :node-test
    :output-to        "target/async-test.js"
-   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.async.*$"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.storage.*$"
+   :compiler-options {:infer-externs true}}
+   
+  :benchmark-test
+  {:target           :node-test
+   :output-to        "target/benchmark-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.benchmark.*$"
    :compiler-options {:infer-externs true}}
    
   :debug
@@ -98,4 +106,130 @@
   {:target           :node-test
    :output-to        "target/core-test.js"
    :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.(core|small|stress)"
+   :compiler-options {:infer-externs true}}
+   
+  :test-amb-simple
+  {:target           :node-script
+   :main             test-amb-simple/-main
+   :output-to        "target/test-amb-simple.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-simple-missionary
+  {:target           :node-script
+   :main             test-simple-missionary/-main
+   :output-to        "target/test-simple-missionary.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-async-minimal
+  {:target           :node-script
+   :main             test-async-minimal/-main
+   :output-to        "target/test-async-minimal.js"
+   :compiler-options {:infer-externs true}}
+   
+  :bench-missionary
+  {:target           :node-script
+   :main             bench-missionary/-main
+   :output-to        "target/bench-missionary.js"
+   :compiler-options {:infer-externs true}}
+   
+  :bench-core-async
+  {:target           :node-script
+   :main             bench-core-async/-main
+   :output-to        "target/bench-core-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :optimized-async
+  {:target           :node-script
+   :main             optimized-async/-main
+   :output-to        "target/optimized-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :lightweight-demo
+  {:target           :node-script
+   :main             lightweight-demo/-main
+   :output-to        "target/lightweight-demo.js"
+   :compiler-options {:infer-externs true}}
+   
+  :process-overhead-isolation
+  {:target           :node-script
+   :main             process-overhead-isolation/-main
+   :output-to        "target/process-overhead-isolation.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-overhead-test
+  {:target           :node-script
+   :main             simple-overhead-test/-main
+   :output-to        "target/simple-overhead-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :sync-vs-async-dispatch
+  {:target           :node-script
+   :main             sync-vs-async-dispatch/-main
+   :output-to        "target/sync-vs-async-dispatch.js"
+   :compiler-options {:infer-externs true}}
+   
+  :proper-warmup-test
+  {:target           :node-script
+   :main             proper-warmup-test/-main
+   :output-to        "target/proper-warmup-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :fast-path-verification
+  {:target           :node-script
+   :main             fast-path-verification/-main
+   :output-to        "target/fast-path-verification.js"
+   :compiler-options {:infer-externs true}}
+   
+  :async-vs-sync-bench
+  {:target           :node-script
+   :main             async-vs-sync-bench/-main
+   :output-to        "target/async-vs-sync-bench.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-sync-detection
+  {:target           :node-script
+   :main             test-sync-detection/-main
+   :output-to        "target/test-sync-detection.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-dual-path
+  {:target           :node-script
+   :main             test-dual-path/-main
+   :output-to        "target/test-dual-path.js"
+   :compiler-options {:infer-externs true}}
+   
+  :cloroutine-btree-bench
+  {:target           :node-script
+   :main             cloroutine-btree-bench/-main
+   :output-to        "target/cloroutine-btree-bench.js"
+   :compiler-options {:infer-externs true}}
+   
+  :cloroutine-btree-bench-fixed
+  {:target           :node-script
+   :main             cloroutine-btree-bench-fixed/-main
+   :output-to        "target/cloroutine-btree-bench-fixed.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-async-await-demo
+  {:target           :node-script
+   :main             simple-async-await-demo/demo
+   :output-to        "target/simple-async-await-demo.js"
+   :compiler-options {:infer-externs true}}
+   
+  :minimal-async-demo
+  {:target           :node-script
+   :main             minimal-async-demo/-main
+   :output-to        "target/minimal-async-demo.js"
+   :compiler-options {:infer-externs true}}
+   
+  :working-async-demo
+  {:target           :node-script
+   :main             working-async-demo/-main
+   :output-to        "target/working-async-demo.js"
+   :compiler-options {:infer-externs true}}
+   
+  :final-async-demo
+  {:target           :node-script
+   :main             final-async-demo/-main
+   :output-to        "target/final-async-demo.js"
    :compiler-options {:infer-externs true}}}}

@@ -1,20 +1,19 @@
 (ns me.tonsky.persistent-sorted-set.async-utils
   "Utilities for async+sync operations with persistent sorted set"
   (:require
-   #?(:clj  [clojure.core.async :as async :refer [go <! >!]]
-      :cljs [cljs.core.async :as async :refer [<! >!]])
+   [missionary.core :refer [sp] :as m]
    [me.tonsky.persistent-sorted-set :as set]
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
    #?(:clj [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]))
   #?(:cljs
      (:require-macros
-      [cljs.core.async.macros :refer [go]]
+      [missionary.core :refer [?]]
       [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])))
 
 ;; Re-export the async+sync macro and translation
 (def storage-translation
-  '{go do
-    <! do})
+  '{sp do
+    ? do})
 
 ;; Storage serialization is handled by the storage implementations directly
 ;; No need for generic serialize/deserialize helpers since nodes contain all needed data)
@@ -70,8 +69,9 @@
      :cljs me.tonsky.persistent-sorted-set/IStorage)
   
   (-restore [this address]
-    (go
-      (<! (async/timeout delay-ms))
+    (sp
+      (when (pos? delay-ms)
+        (? (m/sleep delay-ms)))
       (if-let [{:keys [type keys addresses]} (get @*store address)]
         (case type
           :node
@@ -83,8 +83,9 @@
         (throw (ex-info "Node not found" {:address address})))))
   
   (-store [_ node existing-address]
-    (go
-      (<! (async/timeout delay-ms))
+    (sp
+      (when (pos? delay-ms)
+        (? (m/sleep delay-ms)))
       (let [addr (or existing-address (random-uuid))
             data (cond
                    ;; Node - store addresses if available, otherwise store child addresses
@@ -109,11 +110,12 @@
         addr)))
   
   (-accessed [_ address]
-    (go nil))
+    (sp nil))
   
   (-delete [_ addresses]
-    (go
-      (<! (async/timeout delay-ms))
+    (sp
+      (when (pos? delay-ms)
+        (? (m/sleep delay-ms)))
       (swap! *store #(apply dissoc % addresses)))))
 
 ;; Helpers for testing
@@ -134,7 +136,7 @@
          :cljs me.tonsky.persistent-sorted-set/IStorage)
       
       (-store [this node address]
-        (go
+        (sp
           (let [address (or address (str "node-" (swap! id-counter inc)))
                 data (cond
                        #?@(:cljs [(= (type node) set/Node)
@@ -153,7 +155,7 @@
             address)))
       
       (-restore [this address]
-        (go
+        (sp
           (swap! access-log conj address)
           (if-let [{:keys [type keys addresses]} (get @store address)]
             (case type
@@ -170,7 +172,7 @@
         nil)
       
       (-delete [this addresses]
-        (go
+        (sp
           (swap! store #(apply dissoc % addresses)))))))
 
 (defn make-sync-storage-with-logging
