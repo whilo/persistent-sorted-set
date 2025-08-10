@@ -1,4 +1,4 @@
-{:source-paths ["src-clojure" "test-clojure" "bench-clojure"]
+{:source-paths ["src-clojure" "test-clojure" "bench-clojure" "cloroutine/src"]
  
  :dependencies
  [[org.clojure/core.async "1.8.741"]
@@ -232,4 +232,160 @@
   {:target           :node-script
    :main             final-async-demo/-main
    :output-to        "target/final-async-demo.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-async-await
+  {:target           :node-script
+   :main             test-async-await/-main
+   :output-to        "target/test-async-await.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-minimal-async
+  {:target           :node-script
+   :main             test-minimal-async/-main
+   :output-to        "target/test-minimal-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-integration-async
+  {:target           :node-script
+   :main             test-integration-async/-main
+   :output-to        "target/test-integration-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-direct-async
+  {:target           :node-script
+   :main             test-direct-async/-main
+   :output-to        "target/test-direct-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-simple-demo
+  {:target           :node-script
+   :main             test-simple-demo/-main
+   :output-to        "target/test-simple-demo.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-basic-concept
+  {:target           :node-script
+   :main             test-basic-concept/-main
+   :output-to        "target/test-basic-concept.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-cloroutine-simple
+  {:target           :node-script
+   :main             test-cloroutine-simple/-main
+   :output-to        "target/test-cloroutine-simple.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-clean-async
+  {:target           :node-script
+   :main             test-clean-async/-main
+   :output-to        "target/test-clean-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-basic-cloroutine
+  {:target           :node-script
+   :main             test-basic-cloroutine/-main
+   :output-to        "target/test-basic-cloroutine.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-debug-await
+  {:target           :node-script
+   :main             test-debug-await/-main
+   :output-to        "target/test-debug-await.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-simple-suspension
+  {:target           :node-script
+   :main             test-simple-suspension/-main
+   :output-to        "target/test-simple-suspension.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-promise-async
+  {:target           :node-script
+   :main             test-promise-async/-main
+   :output-to        "target/test-promise-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-debug-promise
+  {:target           :node-script
+   :main             test-debug-promise/-main
+   :output-to        "target/test-debug-promise.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-macro-expand
+  {:target           :node-script
+   :main             test-macro-expand/-main
+   :output-to        "target/test-macro-expand.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-fiber-debug
+  {:target           :node-script
+   :main             test-fiber-debug/-main
+   :output-to        "target/test-fiber-debug.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-sp-aliases
+  {:target           :node-script
+   :main             test-sp-aliases/-main
+   :output-to        "target/test-sp-aliases.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-minimal-sp
+  {:target           :node-script
+   :main             test-minimal-sp/-main
+   :output-to        "target/test-minimal-sp.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-thunk-debug
+  {:target           :node-script
+   :main             test-thunk-debug/-main
+   :output-to        "target/test-thunk-debug.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-alias-vs-direct
+  {:target           :node-script
+   :main             test-alias-vs-direct/-main
+   :output-to        "target/test-alias-vs-direct.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-single-question
+  {:target           :node-script
+   :main             test-single-question/-main
+   :output-to        "target/test-single-question.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-direct-cloroutine-with-await
+  {:target           :node-script
+   :main             test-direct-cloroutine-with-await/-main
+   :output-to        "target/test-direct-cloroutine-with-await.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-fiber-callback-debug
+  {:target           :node-script
+   :main             test-fiber-callback-debug/-main
+   :output-to        "target/test-fiber-callback-debug.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-await-vs-question
+  {:target           :node-script
+   :main             test-await-vs-question/-main
+   :output-to        "target/test-await-vs-question.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-final-clean-async
+  {:target           :node-script
+   :main             test-final-clean-async/-main
+   :output-to        "target/test-final-clean-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-explicit-promisify
+  {:target           :node-script
+   :main             test-explicit-promisify/-main
+   :output-to        "target/test-explicit-promisify.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-cloroutine-benchmark
+  {:target           :node-script
+   :main             simple-cloroutine-benchmark/-main
+   :output-to        "target/simple-cloroutine-benchmark.js"
    :compiler-options {:infer-externs true}}}}
