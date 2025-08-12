@@ -1,11 +1,15 @@
 (ns me.tonsky.persistent-sorted-set.test.benchmark-async
   "Benchmarks comparing synchronous vs asynchronous performance"
   (:require
-   [cljs.test :refer-macros [deftest testing is async]]
-   [missionary.core :refer [sp] :as m]
+   [cljs.test :refer-macros [deftest testing is] :as test]
+   [cloroutine.impl :as impl]
+   [me.tonsky.persistent-sorted-set.async-await :as async-await]
    [me.tonsky.persistent-sorted-set :as set]
+   [await-cps.await-cps :refer [await]]
    [me.tonsky.persistent-sorted-set.async-utils :as utils])
-  (:require-macros [missionary.core :refer [?]]))
+  (:require-macros
+   #_[me.tonsky.persistent-sorted-set.async-await :refer [async await]]
+   [await-cps.await-cps :refer [async]]))
 
 ;; Benchmark utilities
 (defn- now []
@@ -61,16 +65,16 @@
 (defn- run-async-benchmark
   "Run an async benchmark function multiple times"
   [name f warmup-runs test-runs]
-  (sp
+  (async
     ;; Warmup
     (dotimes [_ warmup-runs]
-      (? (f)))
+      (await (f)))
     
     ;; Actual measurements
     (let [timings (atom [])]
       (dotimes [_ test-runs]
         (let [start (now)]
-          (? (f))
+          (await (f))
           (let [end (now)]
             (swap! timings conj (- end start)))))
       
@@ -107,81 +111,83 @@
 
 ;; Benchmark: Single element operations
 (deftest bench-single-operations
-  (async done
-    ((sp
+  (test/async done
+    (-> (async
       (println "\n### Single Element Operations ###")
       
       ;; Setup
       (let [sync-storage (utils/make-sync-storage)
             async-storage (utils/make-async-storage 0) ; Zero delay for pure overhead measurement
-            
+
             ;; Create test sets with 1000 elements
-            sync-set (reduce set/conj 
-                            (set/sorted-set* {:storage sync-storage})
-                            (range 1000))
-            async-set (? (reduce (fn [s-ch n]
-                                   (sp (let [s (? s-ch)]
-                                         (? (set/conj s n compare {:sync? false})))))
-                                 (sp (set/sorted-set* {:storage async-storage}))
-                                 (range 1000)))]
-        
+            sync-set (reduce set/conj
+                             (set/sorted-set* {:storage sync-storage})
+                             (range 1000))
+            async-set (await (reduce (fn [s-ch n]
+                                       (async (let [s (await s-ch)]
+                                                (await (set/conj s n compare {:sync? false})))))
+                                     (async (set/sorted-set* {:storage async-storage}))
+                                     (range 1000)))
+            warmup-runs 100000
+            test-runs 50000]
+
         ;; Benchmark: conj single element
         (let [sync-conj (run-benchmark
-                        "Sync conj"
-                        #(set/conj sync-set 1001)
-                        10 50)
-              async-conj (? (run-async-benchmark
-                            "Async conj"
-                            #(set/conj sync-set 1001 compare {:sync? false})
-                            10 50))]
+                         "conj"
+                         #(set/conj sync-set 1001)
+                         warmup-runs test-runs)
+              async-conj (await (run-async-benchmark
+                                 "conj"
+                                 #(set/conj sync-set 1001 compare {:sync? false})
+                                 warmup-runs test-runs))]
           (print-comparison (format-comparison sync-conj async-conj)))
-        
+
         ;; Benchmark: lookup existing element
         (let [sync-lookup (run-benchmark
-                          "Sync lookup"
-                          #(get sync-set 500)
-                          10 50)
-              async-lookup (? (run-async-benchmark
-                              "Async lookup"
-                              #(sp (? (set/lookup-async async-set 500)))
-                              10 50))]
+                           "Sync lookup"
+                           #(get sync-set 500)
+                           warmup-runs test-runs)
+              async-lookup (await (run-async-benchmark
+                                   "lookup"
+                                   #(async (await (set/lookup-async async-set 500)))
+                                   warmup-runs test-runs))]
           (print-comparison (format-comparison sync-lookup async-lookup)))
-        
+
         ;; Benchmark: contains? check
         (let [sync-contains (run-benchmark
-                            "Sync contains?"
-                            #(contains? sync-set 500)
-                            10 50)
-              async-contains (? (run-async-benchmark
-                                "Async contains?"
-                                #(sp (? (set/contains-async? async-set 500)))
-                                10 50))]
+                             "contains?"
+                             #(contains? sync-set 500)
+                             warmup-runs test-runs)
+              async-contains (await (run-async-benchmark
+                                     "contains?"
+                                     #(async (await (set/contains-async? async-set 500)))
+                                     warmup-runs test-runs))]
           (print-comparison (format-comparison sync-contains async-contains)))
-        
+
         ;; Benchmark: disj single element
         (let [sync-disj (run-benchmark
-                        "Sync disj"
-                        #(set/disj sync-set 500)
-                        10 50)
-              async-disj (? (run-async-benchmark
-                            "Async disj"
-                            #(set/disj async-set 500 compare {:sync? false})
-                            10 50))]
+                         "disj"
+                         #(set/disj sync-set 500)
+                         warmup-runs test-runs)
+              async-disj (await (run-async-benchmark
+                                 "disj"
+                                 #(set/disj async-set 500 compare {:sync? false})
+                                 warmup-runs test-runs))]
           (print-comparison (format-comparison sync-disj async-disj)))))
-     (fn [_] (done))
-     (fn [e] (println "Error in bench-single-operations:" e) (done)))))
+        (.then (fn [_] (done)))
+        (.catch (fn [e] (println "Error in bench-single-operations:" e) (done))))))
 
 ;; Benchmark: Bulk operations
-(deftest bench-bulk-operations
-  (async done
-    ((sp
+#_(deftest bench-bulk-operations
+  (test/async done
+    (-> (async
       (println "\n### Bulk Operations ###")
       
       (let [sync-storage (utils/make-sync-storage)
             async-storage (utils/make-async-storage 0)]
         
         ;; Benchmark: Building sets of different sizes
-        (doseq [n [100 1000 5000]]
+        (doseq [n [100 1000 test-runs]]
           (let [nums (shuffle (range n))
                 
                 sync-build (run-benchmark
@@ -191,22 +197,22 @@
                                    nums)
                            2 10)
                 
-                async-build (? (run-async-benchmark
+                async-build (await (run-async-benchmark
                                 (str "Async build " n " elements")
                                 #(reduce (fn [s-ch num]
-                                          (sp (let [s (? s-ch)]
-                                                (? (set/conj s num compare {:sync? false})))))
-                                        (sp (set/sorted-set* {:storage async-storage}))
+                                          (async (let [s (await s-ch)]
+                                                (await (set/conj s num compare {:sync? false})))))
+                                        (async (set/sorted-set* {:storage async-storage}))
                                         nums)
                                 2 10))]
             (print-comparison (format-comparison sync-build async-build)))))
-     (fn [_] (done))
-     (fn [e] (println "Error in bench-bulk-operations:" e) (done)))))
+        (.then (fn [_] (done)))
+        (.catch (fn [e] (println "Error in bench-bulk-operations:" e) (done))))))
 
 ;; Benchmark: Iteration
 (deftest bench-iteration
-  (async done
-         ((sp
+  (test/async done
+         (-> (async
            (println "\n### Iteration Performance ###")
 
            (let [sync-storage (utils/make-sync-storage)
@@ -216,10 +222,10 @@
                  sync-set (reduce set/conj
                                   (set/sorted-set* {:storage sync-storage})
                                   (range 1000))
-                 async-set (? (reduce (fn [s-ch n]
-                                        (sp (let [s (? s-ch)]
-                                              (? (set/conj s n compare {:sync? false})))))
-                                      (sp (set/sorted-set* {:storage async-storage}))
+                 async-set (await (reduce (fn [s-ch n]
+                                        (async (let [s (await s-ch)]
+                                              (await (set/conj s n compare {:sync? false})))))
+                                      (async (set/sorted-set* {:storage async-storage}))
                                       (range 1000)))]
 
              ;; Benchmark: Full iteration
@@ -228,13 +234,13 @@
                               #(doall (seq sync-set))
                               5 20)
 
-                   async-iter (? (run-async-benchmark
+                   async-iter (await (run-async-benchmark
                                   "Async full iteration"
-                                  #(sp
-                                    (let [ch (? (set/async-slice async-set nil nil))
+                                  #(async
+                                    (let [ch (await (set/async-slice async-set nil nil))
                                           results (atom [])]
                                       (loop []
-                                        (when-let [v (? ch)]
+                                        (when-let [v (await ch)]
                                           (swap! results conj v)
                                           (recur)))
                                       @results))
@@ -247,25 +253,25 @@
                                #(doall (set/slice sync-set 400 499))
                                5 20)
 
-                   async-slice (? (run-async-benchmark
+                   async-slice (await (run-async-benchmark
                                    "Async slice (100 elements)"
-                                   #(sp
-                                     (let [ch (? (set/async-slice async-set 400 499))
+                                   #(async
+                                     (let [ch (await (set/async-slice async-set 400 499))
                                            results (atom [])]
                                        (loop []
-                                         (when-let [v (? ch)]
+                                         (when-let [v (await ch)]
                                            (swap! results conj v)
                                            (recur)))
                                        @results))
                                    5 20))]
                (print-comparison (format-comparison sync-slice async-slice)))))
-          (fn [_] (done))
-          (fn [e] (println "Error:" e) (done))))))
+          (.then (fn [_] (done)))
+          (.catch (fn [e] (println "Error:" e) (done)))))))
 
 ;; Benchmark: Storage operations with different delays
-(deftest bench-storage-delays
-  (async done
-         ((sp
+#_(deftest bench-storage-delays
+  (test/async done
+         (-> (async
            (println "\n### Storage Operations with Delays ###")
 
            (doseq [delay-ms [0 1 5]]
@@ -278,10 +284,10 @@
                    sync-set (reduce set/conj
                                     (set/sorted-set* {:storage sync-storage})
                                     (range 500))
-                   async-set (? (reduce (fn [acc-ch v]
-                                          (sp (let [acc (? acc-ch)]
-                                                (? (set/conj acc v compare {:sync? false})))))
-                                        (sp (set/sorted-set* {:storage async-storage}))
+                   async-set (await (reduce (fn [acc-ch v]
+                                          (async (let [acc (await acc-ch)]
+                                                (await (set/conj acc v compare {:sync? false})))))
+                                        (async (set/sorted-set* {:storage async-storage}))
                                         (range 500)))]
 
                ;; Store and restore benchmark
@@ -291,20 +297,20 @@
                                             (set/restore store-info sync-storage))
                                          2 10)
 
-                     async-store-restore (? (run-async-benchmark
+                     async-store-restore (await (run-async-benchmark
                                              "Async store+restore"
-                                             #(sp
-                                               (let [store-info (? (set/store-set async-set {:sync? false}))]
-                                                 (? (set/restore store-info async-storage {:sync? false}))))
+                                             #(async
+                                               (let [store-info (await (set/store-set async-set {:sync? false}))]
+                                                 (await (set/restore store-info async-storage {:sync? false}))))
                                              2 10))]
                  (print-comparison (format-comparison sync-store-restore async-store-restore))))))
-          (fn [_] (done))
-          (fn [e] (println "Error:" e) (done)))))
+          (.then (fn [_] (done)))
+          (.catch (fn [e] (println "Error:" e) (done))))))
 
 ;; Benchmark: Lazy loading overhead
-(deftest bench-lazy-loading
-  (async done
-         ((sp
+#_(deftest bench-lazy-loading
+  (test/async done
+         (-> (async
            (println "\n### Lazy Loading Overhead ###")
 
            (let [sync-storage (utils/make-sync-storage)
@@ -313,59 +319,45 @@
                  ;; Create and store a large set
                  large-set (reduce set/conj
                                    (set/sorted-set* {:storage sync-storage})
-                                   (range 10000))
+                                   (range warmup-runs))
                  sync-addr (set/store-set large-set)
-                 async-addr (? (set/store-set large-set {:sync? false}))
+                 async-addr (await (set/store-set large-set {:sync? false}))
 
                  ;; Restore lazy sets
                  sync-lazy (set/restore sync-addr sync-storage
-                                        {:count 10000 :shift (.-shift large-set)})
-                 async-lazy (? (set/restore async-addr async-storage
-                                            {:count 10000 :shift (.-shift large-set) :sync? false}))]
+                                        {:count warmup-runs :shift (.-shift large-set)})
+                 async-lazy (await (set/restore async-addr async-storage
+                                            {:count warmup-runs :shift (.-shift large-set) :sync? false}))]
 
              ;; Benchmark: First access (cold)
              (let [sync-first (run-benchmark
                                "Sync first access (cold)"
-                               #(get sync-lazy 5000)
+                               #(get sync-lazy test-runs)
                                2 10)
 
-                   async-first (? (run-async-benchmark
+                   async-first (await (run-async-benchmark
                                    "Async first access (cold)"
-                                   #(set/lookup-async async-lazy 5000)
+                                   #(set/lookup-async async-lazy test-runs)
                                    2 10))]
                (print-comparison (format-comparison sync-first async-first)))
 
              ;; Benchmark: Subsequent access (warm)
              ;; Prime the cache first
-             (get sync-lazy 5000)
-             (? (set/lookup-async async-lazy 5000))
+             (get sync-lazy test-runs)
+             (await (set/lookup-async async-lazy test-runs))
 
              (let [sync-warm (run-benchmark
                               "Sync access (warm cache)"
-                              #(get sync-lazy 5000)
+                              #(get sync-lazy test-runs)
                               5 20)
 
-                   async-warm (? (run-async-benchmark
+                   async-warm (await (run-async-benchmark
                                   "Async access (warm cache)"
-                                  #(sp (? (set/lookup-async async-lazy 5000)))
+                                  #(async (await (set/lookup-async async-lazy test-runs)))
                                   5 20))]
                (print-comparison (format-comparison sync-warm async-warm)))))
-          (fn [_] (done))
-          (fn [e] (println "Error:" e) (done)))))
-
-(deftest bench-summary
-  (async done
-         ((sp
-           (println "\n### Benchmark Summary ###")
-           (println "Run all benchmarks above to see detailed performance comparison")
-           (println "Key metrics:")
-           (println "- Overhead factor: async_time / sync_time")
-           (println "- Lower is better for async overhead")
-           (println "- Expect 1.1-2x overhead for zero-delay async operations")
-           (println "- Storage delays amplify the difference")
-           (println "- Callback approach should be 3-8x faster than core.async"))
-          (fn [_] (done))
-          (fn [e] (println "Error:" e) (done)))))
+          (.then (fn [_] (done)))
+          (.catch (fn [e] (println "Error:" e) (done))))))
 
 ;; Run benchmarks
 (cljs.test/run-tests)

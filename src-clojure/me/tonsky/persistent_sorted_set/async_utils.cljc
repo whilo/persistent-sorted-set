@@ -1,13 +1,13 @@
 (ns me.tonsky.persistent-sorted-set.async-utils
   "Utilities for async+sync operations with persistent sorted set"
   (:require
-   [missionary.core :refer [sp] :as m]
+   #?(:clj [me.tonsky.persistent-sorted-set.async-await :refer [async await]])
    [me.tonsky.persistent-sorted-set :as set]
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
    #?(:clj [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]))
   #?(:cljs
      (:require-macros
-      [missionary.core :refer [?]]
+      [me.tonsky.persistent-sorted-set.async-await :refer [async await]]
       [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])))
 
 ;; Re-export the async+sync macro and translation
@@ -69,9 +69,9 @@
      :cljs me.tonsky.persistent-sorted-set/IStorage)
   
   (-restore [this address]
-    (sp
+    (async
       (when (pos? delay-ms)
-        (? (m/sleep delay-ms)))
+        (await (js/Promise. (fn [resolve _] (js/setTimeout resolve delay-ms)))))
       (if-let [{:keys [type keys addresses]} (get @*store address)]
         (case type
           :node
@@ -83,9 +83,9 @@
         (throw (ex-info "Node not found" {:address address})))))
   
   (-store [_ node existing-address]
-    (sp
+    (async
       (when (pos? delay-ms)
-        (? (m/sleep delay-ms)))
+        (await (js/Promise. (fn [resolve _] (js/setTimeout resolve delay-ms)))))
       (let [addr (or existing-address (random-uuid))
             data (cond
                    ;; Node - store addresses if available, otherwise store child addresses
@@ -110,12 +110,12 @@
         addr)))
   
   (-accessed [_ address]
-    (sp nil))
+    (async nil))
   
   (-delete [_ addresses]
-    (sp
+    (async
       (when (pos? delay-ms)
-        (? (m/sleep delay-ms)))
+        (await (js/Promise. (fn [resolve _] (js/setTimeout resolve delay-ms)))))
       (swap! *store #(apply dissoc % addresses)))))
 
 ;; Helpers for testing
@@ -136,7 +136,7 @@
          :cljs me.tonsky.persistent-sorted-set/IStorage)
       
       (-store [this node address]
-        (sp
+        (async
           (let [address (or address (str "node-" (swap! id-counter inc)))
                 data (cond
                        #?@(:cljs [(= (type node) set/Node)
@@ -155,7 +155,7 @@
             address)))
       
       (-restore [this address]
-        (sp
+        (async
           (swap! access-log conj address)
           (if-let [{:keys [type keys addresses]} (get @store address)]
             (case type
@@ -172,7 +172,7 @@
         nil)
       
       (-delete [this addresses]
-        (sp
+        (async
           (swap! store #(apply dissoc % addresses)))))))
 
 (defn make-sync-storage-with-logging

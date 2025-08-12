@@ -388,4 +388,112 @@
   {:target           :node-script
    :main             simple-cloroutine-benchmark/-main
    :output-to        "target/simple-cloroutine-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :benchmark-comparison
+  {:target           :node-script
+   :main             benchmark-comparison/run-benchmarks
+   :output-to        "target/benchmark-comparison.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-btree-benchmark
+  {:target           :node-script
+   :main             simple-btree-benchmark/-main
+   :output-to        "target/simple-btree-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :working-benchmark
+  {:target           :node-script
+   :main             working-benchmark/-main
+   :output-to        "target/working-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :final-benchmark
+  {:target           :node-script
+   :main             final-benchmark/-main
+   :output-to        "target/final-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :fast-path-benchmark
+  {:target           :node-script
+   :main             fast-path-benchmark/-main
+   :output-to        "target/fast-path-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-fast-path
+  {:target           :node-script
+   :main             test-fast-path/-main
+   :output-to        "target/test-fast-path.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-fast-path-simple
+  {:target           :node-script
+   :main             test-fast-path-simple/-main
+   :output-to        "target/test-fast-path-simple.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-promise-fast-path
+  {:target           :node-script
+   :main             test-promise-fast-path/-main
+   :output-to        "target/test-promise-fast-path.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-clean-api
+  {:target           :node-script
+   :main             test-clean-api/-main
+   :output-to        "target/test-clean-api.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-simple-ifn
+  {:target           :node-script
+   :main             test-simple-ifn/-main
+   :output-to        "target/test-simple-ifn.js"
+   :compiler-options {:infer-externs true}}
+   
+  :benchmark-focused
+  {:target           :node-script
+   :main             benchmark-focused/-main
+   :output-to        "target/benchmark-focused.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-pure-overhead
+  {:target           :node-script
+   :main             test-pure-async-overhead/-main
+   :output-to        "target/test-pure-overhead.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-simple-overhead
+  {:target           :node-script
+   :main             test-pure-overhead-simple/-main
+   :output-to        "target/test-simple-overhead.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-overhead-breakdown
+  {:target           :node-script
+   :main             test-overhead-breakdown/-main
+   :output-to        "target/test-overhead-breakdown.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-breakdown
+  {:target           :node-script
+   :main             simple-breakdown/-main
+   :output-to        "target/simple-breakdown.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-manual-async
+  {:target           :node-script
+   :main             test-manual-async/-main
+   :output-to        "target/test-manual-async.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-conditional-await
+  {:target           :node-script
+   :main             test-conditional-await/-main
+   :output-to        "target/test-conditional-await.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-conditional-simple
+  {:target           :node-script
+   :main             test-conditional-simple/-main
+   :output-to        "target/test-conditional-simple.js"
    :compiler-options {:infer-externs true}}}}

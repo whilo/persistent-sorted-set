@@ -1,8 +1,11 @@
 (ns me.tonsky.persistent-sorted-set.async-await
   "Drop-in replacements for missionary's sp and ? using cloroutine"
   (:refer-clojure :exclude [await])
-  #?(:clj (:require [cloroutine.core :refer [cr]]))
-  #?(:cljs (:require-macros [cloroutine.core :refer [cr]])))
+  #?(:clj (:require [cloroutine.core :refer [cr]]
+                    [cloroutine.impl :as impl]
+                    [clojure.walk]))
+  #?(:cljs (:require [cloroutine.impl :as impl])
+     :cljs (:require-macros [cloroutine.core :refer [cr]])))
 
 ;; Following the Java async/await example from cloroutine docs
 
@@ -11,25 +14,33 @@
 (def ^:dynamic *value*)
 (def ^:dynamic *error*)
 
-;; Following the Java async/await example exactly: await only accepts Promises (like Java's CompletableFuture)
-(defn await 
-  "Awaits a JavaScript Promise (like Java's CompletableFuture.whenComplete)"
+;; Internal await that always suspends - only used when we know we have a Promise
+(defn await-internal
+  "Internal await that always suspends via cloroutine. Only call with actual Promises."
   [promise]
   #?(:cljs 
-     (cond
-       (instance? js/Promise promise)
-       ;; For Promises, register fiber (like .whenComplete in Java)
-       (let [current-fiber *fiber*]
-         (.then promise 
-                (fn [value] (current-fiber current-fiber value nil))
-                (fn [error] (current-fiber current-fiber nil error)))
-         ;; Don't return the Promise - let cloroutine suspend here
-         nil)
-       
-       :else
-       ;; Direct value - just return it (no async operation needed)
-       promise)
+     (let [current-fiber *fiber*]
+       ;; Register fiber with Promise
+       (.then promise 
+              (fn [value] (current-fiber current-fiber value nil))
+              (fn [error] (current-fiber current-fiber nil error)))
+       ;; Always return nil to suspend the coroutine
+       nil)
      :default promise))
+
+;; Smart await macro with conditional fast path
+(defmacro await
+  "Smart await that checks if value is a Promise at runtime.
+   If it's a Promise, uses cloroutine suspension.
+   If it's a synchronous value, returns directly with zero overhead."
+  [value-expr]
+  (if (:js-globals &env) ; ClojureScript
+    `(let [val# ~value-expr]
+       (if (instance? js/Promise val#)
+         (await-internal val#)    ; Slow path: cloroutine suspension
+         val#))                   ; Fast path: direct return, no cloroutine
+    ;; Clojure - just return the value
+    value-expr))
 
 ;; Helper function for converting callback-based operations to Promises
 (defn promisify
@@ -51,25 +62,26 @@
 ;; Direct translation of the Java CompletableFuture example to JavaScript Promise
 (defmacro async [& body]
   (if (:ns &env) ;; ClojureScript compilation
-    `(let [resolve-fn# (atom nil)
-           reject-fn# (atom nil)
-           promise# (js/Promise. 
-                      (fn [resolve# reject#]
-                        (reset! resolve-fn# resolve#)
-                        (reset! reject-fn# reject#)))
-           cr# (cr {await thunk}
-                 (try 
-                   (@resolve-fn# (do ~@body))
-                   (catch :default e#
-                     (@reject-fn# e#))))]
-       ;; Create fiber exactly like Java BiConsumer
-       (binding [*fiber* (fn [f# v# e#]
-                          (binding [*fiber* f#
-                                    *value* v#
-                                    *error* e#]
-                            (cr#)))]
-         (cr#))
-       promise#)
+    (let [expanded-body (clojure.walk/macroexpand-all `(do ~@body))]
+      `(let [resolve-fn# (atom nil)
+             reject-fn# (atom nil)
+             promise# (js/Promise. 
+                        (fn [resolve# reject#]
+                          (reset! resolve-fn# resolve#)
+                          (reset! reject-fn# reject#)))
+             cr# (cr {await-internal thunk}
+                   (try 
+                     (@resolve-fn# ~expanded-body)
+                     (catch :default e#
+                       (@reject-fn# e#))))]
+         ;; Create fiber exactly like Java BiConsumer
+         (binding [*fiber* (fn [f# v# e#]
+                            (binding [*fiber* f#
+                                      *value* v#
+                                      *error* e#]
+                              (cr#)))]
+           (cr#))
+         promise#))
     ;; Clojure compilation
     `(do ~@body)))
 
@@ -81,6 +93,35 @@
 
 ;; Note: We focus on `await` and `async` as the primary API
 ;; These provide the core async/await functionality with proper cloroutine integration
+
+;; Make Promise callable like missionary's process for compatibility
+#?(:cljs
+   (extend-type js/Promise
+     IFn
+     (-invoke 
+       ;; Called with no args - cancel (returns nil like missionary)
+       ([this] nil)
+       ;; Called with success callback only
+       ([this success] 
+        (.then this success))
+       ;; Called with success and failure callbacks
+       ([this success failure]
+        (-> this
+            (.then success)
+            (.catch failure))))))
+
+;; Helper for creating Promise-returning operations that work with await
+(defn to-promise
+  "Converts a value or async operation to a Promise.
+   - If already a Promise, returns it as-is
+   - If a synchronous value, wraps in Promise.resolve for fast path
+   This ensures await always gets a Promise but sync values settle immediately."
+  [value-or-promise]
+  #?(:cljs
+     (if (instance? js/Promise value-or-promise)
+       value-or-promise
+       (js/Promise.resolve value-or-promise))
+     :default value-or-promise))
 
 ;; Helper function for storage operations
 (defn make-async-storage-op
@@ -107,42 +148,3 @@
      :default
      ;; Clojure - just call synchronously
      (apply operation storage args)))
-
-;; ============================================================================
-;; Compatibility Layer
-;; ============================================================================
-
-(defn task?
-  "Check if a value is a Promise or task"
-  [x]
-  #?(:cljs (or (instance? js/Promise x) (fn? x))
-     :default (fn? x)))
-
-(defn run-sync
-  "Run a Promise or task synchronously (for testing) - returns Promise in ClojureScript"
-  [promise-or-task]
-  #?(:cljs
-     (if (instance? js/Promise promise-or-task)
-       ;; Just return the Promise as-is - caller can await it
-       promise-or-task
-       (if (fn? promise-or-task)
-         (promise-or-task)
-         promise-or-task))
-     :default
-     (if (fn? promise-or-task)
-       (promise-or-task)
-       promise-or-task)))
-
-(defn run-async
-  "Run a Promise or task with callbacks"
-  [promise-or-task on-success on-error]
-  #?(:cljs
-     (if (instance? js/Promise promise-or-task)
-       (.then promise-or-task on-success on-error)
-       (if (fn? promise-or-task)
-         (promise-or-task on-success on-error)
-         (on-success promise-or-task)))
-     :default
-     (if (fn? promise-or-task)
-       (promise-or-task on-success on-error)
-       (on-success promise-or-task))))
