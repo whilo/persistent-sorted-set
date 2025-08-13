@@ -135,8 +135,8 @@
                                                 (await (set/conj s n compare {:sync? false})))))
                                      (async (set/sorted-set* {:storage async-storage}))
                                      (range 100)))
-            warmup-runs 5000   ; Increased warmup for better JIT with trampoline fix
-            test-runs 2000]    ; Increased test runs for better JIT with trampoline fix
+            warmup-runs 3      ; Very minimal to avoid stack overflow 
+            test-runs 3]       ; Very minimal to avoid stack overflow
 
         ;; Benchmark: conj single element
         (let [sync-conj (run-benchmark

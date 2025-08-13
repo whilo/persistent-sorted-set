@@ -24,6 +24,96 @@
    :main             me.tonsky.persistent-sorted-set.test.benchmark-async/-main
    :output-to        "target/benchmark-async.js"
    :compiler-options {:infer-externs true}}
+   
+  :storage-architecture-test
+  {:target           :node-script
+   :main             storage-architecture-test/-main
+   :output-to        "target/storage-architecture-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :debug-immediate-function
+  {:target           :node-script
+   :main             debug-immediate-function/-main
+   :output-to        "target/debug-immediate-function.js"
+   :compiler-options {:infer-externs true}}
+   
+  :debug-immediate-unwrap
+  {:target           :node-script
+   :main             debug-immediate-unwrap/-main
+   :output-to        "target/debug-immediate-unwrap.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-correct-immediate-usage
+  {:target           :node-script
+   :main             test-correct-immediate-usage/-main
+   :output-to        "target/test-correct-immediate-usage.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-immediate-test
+  {:target           :node-script
+   :main             simple-immediate-test/-main
+   :output-to        "target/simple-immediate-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :fixed-storage-test
+  {:target           :node-script
+   :main             fixed-storage-test/-main
+   :output-to        "target/fixed-storage-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-await-test
+  {:target           :node-script
+   :main             simple-await-test/-main
+   :output-to        "target/simple-await-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :clean-storage-test
+  {:target           :node-script
+   :main             clean-storage-test/-main
+   :output-to        "target/clean-storage-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-storage-debug
+  {:target           :node-script
+   :main             simple-storage-debug/-main
+   :output-to        "target/simple-storage-debug.js"
+   :compiler-options {:infer-externs true}}
+   
+  :immediate-optimization-benchmark
+  {:target           :node-script
+   :main             immediate-optimization-benchmark/-main
+   :output-to        "target/immediate-optimization-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :light-benchmark
+  {:target           :node-script
+   :main             light-benchmark/-main
+   :output-to        "target/light-benchmark.js"
+   :compiler-options {:infer-externs true}}
+  
+  :debug-callback-error
+  {:target           :node-script
+   :main             debug-callback-error/-main
+   :output-to        "target/debug-callback-error.js"
+   :compiler-options {:infer-externs true}}
+  
+  :test-simple-callback
+  {:target           :node-script
+   :main             test-simple-callback/-main
+   :output-to        "target/test-simple-callback.js"
+   :compiler-options {:infer-externs true}}
+  
+  :test-immediate-vs-callback
+  {:target           :node-script
+   :main             test-immediate-vs-callback/-main
+   :output-to        "target/test-immediate-vs-callback.js"
+   :compiler-options {:infer-externs true}}
+  
+  :debug-state-machine
+  {:target           :node-script
+   :main             debug-state-machine/-main
+   :output-to        "target/debug-state-machine.js"
+   :compiler-options {:infer-externs true}}
   
   :test
   {:target           :node-test

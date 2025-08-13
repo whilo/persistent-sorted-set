@@ -1,7 +1,7 @@
 (ns me.tonsky.persistent-sorted-set.async-utils
   "Utilities for async+sync operations with persistent sorted set"
   (:require
-   [await-cps :refer [await]]
+   [await-cps :refer [await] :as await-cps]
    [me.tonsky.persistent-sorted-set :as set]
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
    #?(:clj [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]))
@@ -25,6 +25,7 @@
      :cljs me.tonsky.persistent-sorted-set/IStorage)
   
   (-restore [this address]
+    ;; Sync storage returns normal values for sync code compatibility
     (if-let [{:keys [type keys addresses]} (get @*store address)]
       (case type
         :node
@@ -36,6 +37,7 @@
       (throw (ex-info "Node not found" {:address address}))))
   
   (-store [_ node existing-address]
+    ;; Sync storage returns normal values for sync code compatibility
     (let [addr (or existing-address (random-uuid))
           data (cond
                  ;; Node - store addresses if available, otherwise store child addresses
@@ -69,45 +71,94 @@
      :cljs me.tonsky.persistent-sorted-set/IStorage)
   
   (-restore [this address]
-    (async
-      (when (pos? delay-ms)
-        (await (js/Promise. (fn [resolve _] (js/setTimeout resolve delay-ms)))))
-      (if-let [{:keys [type keys addresses]} (get @*store address)]
-        (case type
-          :node
-          ;; Create Node with addresses for lazy restoration (following Java pattern)
-          #?(:cljs (set/make-node-from-storage keys (vec addresses)))
-          
-          :leaf
-          #?(:cljs (set/make-leaf-from-storage keys)))
-        (throw (ex-info "Node not found" {:address address})))))
+    ;; Optimization: return immediate value if no delay, callback if delay
+    (if (zero? delay-ms)
+      ;; Fast path: no delay = immediate value
+      (await-cps/immediate
+        (if-let [{:keys [type keys addresses]} (get @*store address)]
+          (case type
+            :node
+            ;; Create Node with addresses for lazy restoration (following Java pattern)
+            #?(:cljs (set/make-node-from-storage keys (vec addresses)))
+            
+            :leaf
+            #?(:cljs (set/make-leaf-from-storage keys)))
+          (throw (ex-info "Node not found" {:address address}))))
+      ;; Slow path: delay = callback function
+      (fn [resolve raise]
+        (js/setTimeout 
+          (fn []
+            (try
+              (if-let [{:keys [type keys addresses]} (get @*store address)]
+                (let [node (case type
+                            :node
+                            #?(:cljs (set/make-node-from-storage keys (vec addresses)))
+                            
+                            :leaf
+                            #?(:cljs (set/make-leaf-from-storage keys)))]
+                  (resolve node))
+                (raise (ex-info "Node not found" {:address address})))
+              (catch :default e
+                (raise e))))
+          delay-ms))))
   
   (-store [_ node existing-address]
-    (async
-      (when (pos? delay-ms)
-        (await (js/Promise. (fn [resolve _] (js/setTimeout resolve delay-ms)))))
-      (let [addr (or existing-address (random-uuid))
-            data (cond
-                   ;; Node - store addresses if available, otherwise store child addresses
-                   #?@(:cljs [(= (type node) set/Node)
-                              (if (.-addresses node)
-                                {:type :node
-                                 :keys (.-keys node)
-                                 :addresses (vec (.-addresses node))}
-                                ;; Node without addresses - need to store children first
-                                {:type :node
-                                 :keys (.-keys node)
-                                 :addresses []})])  ;; Empty addresses for now
-                   
-                   ;; Leaf node
-                   #?@(:cljs [(= (type node) set/Leaf)
-                              {:type :leaf
-                               :keys (.-keys node)}])
-                   
-                   :else
-                   (throw (ex-info "Unknown node type for storage" {:node node})))]
-        (swap! *store assoc addr data)
-        addr))))
+    ;; Optimization: return immediate value if no delay, callback if delay
+    (if (zero? delay-ms)
+      ;; Fast path: no delay = immediate value
+      (await-cps/immediate
+        (let [addr (or existing-address (random-uuid))
+              data (cond
+                     ;; Node - store addresses if available, otherwise store child addresses
+                     #?@(:cljs [(= (type node) set/Node)
+                                (if (.-addresses node)
+                                  {:type :node
+                                   :keys (.-keys node)
+                                   :addresses (vec (.-addresses node))}
+                                  ;; Node without addresses - need to store children first
+                                  {:type :node
+                                   :keys (.-keys node)
+                                   :addresses []})])  ;; Empty addresses for now
+                     
+                     ;; Leaf node
+                     #?@(:cljs [(= (type node) set/Leaf)
+                                {:type :leaf
+                                 :keys (.-keys node)}])
+                     
+                     :else
+                     (throw (ex-info "Unknown node type for storage" {:node node})))]
+          (swap! *store assoc addr data)
+          addr))
+      ;; Slow path: delay = callback function  
+      (fn [resolve raise]
+        (js/setTimeout
+          (fn []
+            (try
+              (let [addr (or existing-address (random-uuid))
+                    data (cond
+                           ;; Node - store addresses if available, otherwise store child addresses
+                           #?@(:cljs [(= (type node) set/Node)
+                                      (if (.-addresses node)
+                                        {:type :node
+                                         :keys (.-keys node)
+                                         :addresses (vec (.-addresses node))}
+                                        ;; Node without addresses - need to store children first
+                                        {:type :node
+                                         :keys (.-keys node)
+                                         :addresses []})])  ;; Empty addresses for now
+                           
+                           ;; Leaf node
+                           #?@(:cljs [(= (type node) set/Leaf)
+                                      {:type :leaf
+                                       :keys (.-keys node)}])
+                           
+                           :else
+                           (throw (ex-info "Unknown node type for storage" {:node node})))]
+                (swap! *store assoc addr data)
+                (resolve addr))
+              (catch :default e
+                (raise e))))
+          delay-ms))))
   
   (-accessed [_ address]
     (async nil))
@@ -172,8 +223,7 @@
         nil)
       
       (-delete [this addresses]
-        (async
-          (swap! store #(apply dissoc % addresses)))))))
+        (swap! store #(apply dissoc % addresses))))))
 
 (defn make-sync-storage-with-logging
   "Creates a sync storage that logs all accesses"
@@ -219,4 +269,4 @@
         nil)
       
       (-delete [this addresses]
-        (swap! store #(apply dissoc % addresses))))))
+        (swap! store #(apply dissoc % addresses))))))))
