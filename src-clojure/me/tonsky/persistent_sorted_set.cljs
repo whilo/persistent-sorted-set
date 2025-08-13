@@ -5,11 +5,11 @@
   (:refer-clojure :exclude [conj disj sorted-set sorted-set-by])
   (:require
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
-   [await-cps.await-cps :refer [await]])
+   [await-cps :refer [await]])
   (:require-macros
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
    [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]
-   [await-cps.await-cps :refer [async]]
+   [await-cps :refer [async]]
    #_[me.tonsky.persistent-sorted-set.async-await :refer [async await]]))
 
 ; B+ tree

@@ -1,13 +1,13 @@
 (ns me.tonsky.persistent-sorted-set.async-utils
   "Utilities for async+sync operations with persistent sorted set"
   (:require
-   #?(:clj [me.tonsky.persistent-sorted-set.async-await :refer [async await]])
+   #?(:clj [await-cps :refer [async await]])
    [me.tonsky.persistent-sorted-set :as set]
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
    #?(:clj [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]))
   #?(:cljs
      (:require-macros
-      [me.tonsky.persistent-sorted-set.async-await :refer [async await]]
+      [await-cps :refer [async await]]
       [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])))
 
 ;; Re-export the async+sync macro and translation
@@ -107,7 +107,7 @@
                    :else
                    (throw (ex-info "Unknown node type for storage" {:node node})))]
         (swap! *store assoc addr data)
-        addr)))
+        addr))))
   
   (-accessed [_ address]
     (async nil))
@@ -116,7 +116,7 @@
     (async
       (when (pos? delay-ms)
         (await (js/Promise. (fn [resolve _] (js/setTimeout resolve delay-ms)))))
-      (swap! *store #(apply dissoc % addresses)))))
+      (swap! *store #(apply dissoc % addresses))))
 
 ;; Helpers for testing
 (defn make-sync-storage []

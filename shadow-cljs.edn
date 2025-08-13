@@ -1,15 +1,28 @@
-{:source-paths ["src-clojure" "test-clojure" "bench-clojure" "cloroutine/src"]
+{:source-paths ["src-clojure" "test-clojure" "bench-clojure" "cloroutine/src" "."]
  
  :dependencies
  [[org.clojure/core.async "1.8.741"]
-  [missionary/missionary "b.47-SNAPSHOT"]
-  [cloroutine "11"]]
+  [missionary/missionary "b.46"]
+  [cloroutine "11"]
+  [await-cps/await-cps "0.1.14"]]
  
  :builds
  {:bench
   {:target           :node-script
    :main             me.tonsky.persistent-sorted-set.bench/-main
    :output-to        "target/bench.js"
+   :compiler-options {:infer-externs true}}
+  
+  :test-await-cps-simple
+  {:target           :node-script
+   :main             test-await-cps-simple/-main
+   :output-to        "target/test-await-cps-simple.js"
+   :compiler-options {:infer-externs true}}
+   
+  :benchmark-async
+  {:target           :node-script
+   :main             me.tonsky.persistent-sorted-set.test.benchmark-async/-main
+   :output-to        "target/benchmark-async.js"
    :compiler-options {:infer-externs true}}
   
   :test
@@ -450,6 +463,12 @@
    :output-to        "target/test-simple-ifn.js"
    :compiler-options {:infer-externs true}}
    
+  :test-missionary-basic
+  {:target           :node-script
+   :main             test-missionary-basic/-main
+   :output-to        "target/test-missionary-basic.js"
+   :compiler-options {:infer-externs true}}
+   
   :benchmark-focused
   {:target           :node-script
    :main             benchmark-focused/-main
@@ -496,4 +515,100 @@
   {:target           :node-script
    :main             test-conditional-simple/-main
    :output-to        "target/test-conditional-simple.js"
+   :compiler-options {:infer-externs true}}
+   
+  :coroutine-benchmark
+  {:target           :node-script
+   :main             coroutine-benchmark/-main
+   :output-to        "target/coroutine-benchmark.js"
+   :compiler-options {:infer-externs true}}
+
+  :simple-coroutine-benchmark-fixed
+  {:target           :node-script
+   :main             simple-coroutine-benchmark-fixed/-main
+   :output-to        "target/simple-coroutine-benchmark-fixed.js"
+   :compiler-options {:infer-externs true}}
+
+  :simple-coroutine-benchmark-clean
+  {:target           :node-script
+   :main             simple-coroutine-benchmark-clean/-main
+   :output-to        "target/simple-coroutine-benchmark-clean.js"
+   :compiler-options {:infer-externs true}}
+
+  :complex-coroutine-benchmark
+  {:target           :node-script
+   :main             complex-coroutine-benchmark/-main
+   :output-to        "target/complex-coroutine-benchmark.js"
+   :compiler-options {:infer-externs true}}
+
+  :await-overhead-benchmark
+  {:target           :node-script
+   :main             await-overhead-benchmark/-main
+   :output-to        "target/await-overhead-benchmark.js"
+   :compiler-options {:infer-externs true}}
+
+  :await-overhead-benchmark-fixed
+  {:target           :node-script
+   :main             await-overhead-benchmark-fixed/-main
+   :output-to        "target/await-overhead-benchmark-fixed.js"
+   :compiler-options {:infer-externs true}}
+
+  :fast-await-test
+  {:target           :node-script
+   :main             fast-await-test/-main
+   :output-to        "target/fast-await-test.js"
+   :compiler-options {:infer-externs true}}
+
+  :fast-await-benchmark
+  {:target           :node-script
+   :main             fast-await-benchmark/-main
+   :output-to        "target/fast-await-benchmark.js"
+   :compiler-options {:infer-externs true}}
+
+  :fast-await-integrated-test
+  {:target           :node-script
+   :main             fast-await-integrated-test/-main
+   :output-to        "target/fast-await-integrated-test.js"
+   :compiler-options {:infer-externs true}}
+
+  :macro-expansion-debug
+  {:target           :node-script
+   :main             macro-expansion-debug/-main
+   :output-to        "target/macro-expansion-debug.js"
+   :compiler-options {:infer-externs true}}
+
+  :manual-conditional-await-test
+  {:target           :node-script
+   :main             manual-conditional-await-test/-main
+   :output-to        "target/manual-conditional-await-test.js"
+   :compiler-options {:infer-externs true}}
+
+  :direct-comparison-test
+  {:target           :node-script
+   :main             direct-comparison-test/-main
+   :output-to        "target/direct-comparison-test.js"
+   :compiler-options {:infer-externs true}}
+
+  :debug-type-error
+  {:target           :node-script
+   :main             debug-type-error/-main
+   :output-to        "target/debug-type-error.js"
+   :compiler-options {:infer-externs true}}
+   
+  :minimal-benchmark
+  {:target           :node-script
+   :main             minimal-benchmark/-main
+   :output-to        "target/minimal-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-working-benchmark
+  {:target           :node-script
+   :main             simple-working-benchmark/-main
+   :output-to        "target/simple-working-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :debug-when-let
+  {:target           :node-script
+   :main             debug-when-let/-main
+   :output-to        "target/debug-when-let.js"
    :compiler-options {:infer-externs true}}}}
