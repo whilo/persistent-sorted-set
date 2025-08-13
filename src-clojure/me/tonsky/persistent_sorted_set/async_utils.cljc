@@ -1,13 +1,13 @@
 (ns me.tonsky.persistent-sorted-set.async-utils
   "Utilities for async+sync operations with persistent sorted set"
   (:require
-   #?(:clj [await-cps :refer [async await]])
+   [await-cps :refer [await]]
    [me.tonsky.persistent-sorted-set :as set]
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
    #?(:clj [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]))
   #?(:cljs
      (:require-macros
-      [await-cps :refer [async await]]
+      [await-cps :refer [async]]
       [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])))
 
 ;; Re-export the async+sync macro and translation

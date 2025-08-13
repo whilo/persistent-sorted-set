@@ -433,6 +433,18 @@
    :output-to        "target/fast-path-benchmark.js"
    :compiler-options {:infer-externs true}}
    
+  :unified-callback-benchmark
+  {:target           :node-script
+   :main             unified-callback-benchmark/-main
+   :output-to        "target/unified-callback-benchmark.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-unified-simple
+  {:target           :node-script
+   :main             test-unified-simple/-main
+   :output-to        "target/test-unified-simple.js"
+   :compiler-options {:infer-externs true}}
+   
   :test-fast-path
   {:target           :node-script
    :main             test-fast-path/-main
@@ -611,4 +623,16 @@
   {:target           :node-script
    :main             debug-when-let/-main
    :output-to        "target/debug-when-let.js"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-pss-correctness
+  {:target           :node-script
+   :main             simple-pss-correctness/-main
+   :output-to        "target/simple-pss-correctness.js"
+   :compiler-options {:infer-externs true}}
+   
+  :performance-analysis-benchmark
+  {:target           :node-script
+   :main             performance-analysis-benchmark/-main
+   :output-to        "target/performance-analysis-benchmark.js"
    :compiler-options {:infer-externs true}}}}
