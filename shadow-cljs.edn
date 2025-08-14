@@ -606,6 +606,12 @@
    :main             test-manual-async/-main
    :output-to        "target/test-manual-async.js"
    :compiler-options {:infer-externs true}}
+  
+  :test-disj-isolation
+  {:target           :node-script
+   :main             test-disj-isolation/-main
+   :output-to        "target/test-disj-isolation.js"
+   :compiler-options {:infer-externs true}}
    
   :test-conditional-await
   {:target           :node-script
@@ -709,10 +715,10 @@
    :output-to        "target/simple-working-benchmark.js"
    :compiler-options {:infer-externs true}}
    
-  :debug-when-let
+  :test-disj-very-simple
   {:target           :node-script
-   :main             debug-when-let/-main
-   :output-to        "target/debug-when-let.js"
+   :main             test-disj-very-simple/-main
+   :output-to        "target/test-disj-very-simple.js"
    :compiler-options {:infer-externs true}}
    
   :simple-pss-correctness
