@@ -1098,33 +1098,61 @@
       (when (path-lt path till-path)
         (Iter. set path till-path (keys-for set path) (path-get path 0))))))
 
-;; Async-slice implementation for our async/await
+
+(defprotocol IAsyncSeq
+  (-afirst [this] "Returns async expression yielding first element")
+  (-arest [this] "Returns async expression yielding rest of sequence"))
+
+(deftype AsyncSeq [^BTSet set path till-path ^:mutable keys ^:mutable idx]
+  IAsyncSeq
+  (-afirst [this]
+    (async
+      (when (and path (path-lt path till-path))
+        ;; Load keys only if not cached
+        (when (nil? keys)
+          (set! keys (await (keys-for set path {:sync? false})))
+          (set! idx (path-get path 0)))
+        (arrays/aget keys idx))))
+
+  (-arest [this]
+    (async
+      (when (and path (path-lt path till-path))
+        ;; Load keys only if not cached
+        (when (nil? keys)
+          (set! keys (await (keys-for set path {:sync? false})))
+          (set! idx (path-get path 0)))
+        (if (< (inc idx) (arrays/alength keys))
+          ;; Next element is in same leaf - reuse keys array!
+          (AsyncSeq. set (path-inc path) till-path keys (inc idx))
+          ;; Need to move to next leaf
+          (let [next-path (await (next-path-async set path))]
+            (when (and next-path (path-lt next-path till-path))
+              ;; Don't pass keys - will be loaded lazily for new leaf
+              (AsyncSeq. set next-path till-path nil nil)))))))
+
+  
+  Object
+  (toString [this] 
+    (str "AsyncSeq[" (path-str path) " -> " (path-str till-path) "]"))
+
+  IPrintWithWriter
+  (-pr-writer [this writer opts]
+    (-write writer (str this))))
+
+(defn async-seq
+  "Create an async sequence from a BTSet and path range"
+  [set path till-path]
+  (when (and path (path-lt path till-path))
+    (AsyncSeq. set path till-path nil nil)))
+
+;; Updated async-slice to return AsyncSeq
 (defn -async-slice
-  "Async version of slice that returns a Promise resolving to a vector of elements."
+  "Async version of slice that returns an AsyncSeq."
   [^BTSet set key-from key-to comparator]
   (async 
     (when-some [path (await (-seek* set key-from comparator {:sync? false}))]
       (let [till-path (await (-rseek* set key-to comparator {:sync? false}))]
-        (when (path-lt path till-path)
-          ;; First collect all elements in the range
-          (let [elements (atom [])]
-            (loop [current-path path]
-              (when (and current-path (path-lt current-path till-path))
-                (let [keys (await (keys-for set current-path {:sync? false}))
-                      idx (path-get current-path 0)
-                      end-idx (if (path-same-leaf current-path till-path)
-                                (path-get till-path 0)
-                                (arrays/alength keys))]
-                  ;; Collect elements from current leaf
-                  (loop [i idx]
-                    (when (< i end-idx)
-                      (swap! elements conj (arrays/aget keys i))
-                      (recur (inc i))))
-                  ;; Move to next path
-                  (when-not (path-same-leaf current-path till-path)
-                    (recur (await (next-path-async set (path-set current-path 0 (dec (arrays/alength keys))))))))))
-            ;; Return the collected elements as a vector
-            @elements))))))
+        (async-seq set path till-path)))))
 
 (defn arr-map-inplace [f arr]
   (let [len (arrays/alength arr)]

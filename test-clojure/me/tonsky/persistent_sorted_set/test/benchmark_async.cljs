@@ -4,7 +4,8 @@
    [cljs.test :refer-macros [deftest testing is] :as test]
    [await-cps :refer [await run-async]]
    [me.tonsky.persistent-sorted-set :as set]
-   [me.tonsky.persistent-sorted-set.async-utils-simple :as utils])
+   [me.tonsky.persistent-sorted-set.async-utils-simple :as utils]
+   [cloroutine.impl :as i])
   (:require-macros
    [await-cps :refer [async]]))
 
@@ -217,7 +218,7 @@
     (fn [e] (println "Error in bench-bulk-operations:" e) (done)))))
 
 ;; Benchmark: Iteration
-#_(deftest bench-iteration
+(deftest bench-iteration
   (test/async done
     (run-async-test
       (fn [] (async
@@ -225,6 +226,9 @@
 
            (let [sync-storage (utils/make-sync-storage)
                  async-storage (utils/make-async-storage 0)
+
+                 warmup-runs 500
+                 iteration-runs 2000
 
                  ;; Create test sets
                  sync-set (reduce set/conj
@@ -240,20 +244,21 @@
              (let [sync-iter (run-benchmark
                               "Sync full iteration"
                               (fn [] (doall (seq sync-set)))
-                              5 20)
+                              warmup-runs iteration-runs)
 
                    async-iter (await (run-async-benchmark
                                   "Async full iteration"
                                   (fn [] (async
-                                    (let [ch (await (set/async-slice async-set nil nil))
-                                          results (atom [])]
-                                      (loop []
-                                        (let [v (await ch)]
-                                          (when v
-                                            (swap! results conj v)
-                                            (recur))))
-                                      @results)))
-                                  5 20))]
+                                    (let [async-seq (await (set/async-slice async-set nil nil))]
+                                      (loop [s async-seq
+                                             count 0]
+                                        (if s
+                                          (let [v (await (set/-afirst s))]
+                                            (if v
+                                              (recur (await (set/-arest s)) (inc count))
+                                              count))
+                                          count)))))
+                                  warmup-runs iteration-runs))]
                (print-comparison (format-comparison sync-iter async-iter)))
 
              ;; Benchmark: Slice iteration (100 elements)
@@ -265,17 +270,18 @@
                    async-slice (await (run-async-benchmark
                                    "Async slice (100 elements)"
                                    (fn [] (async
-                                     (let [ch (await (set/async-slice async-set 400 499))
-                                           results (atom [])]
-                                       (loop []
-                                         (let [v (await ch)]
-                                           (when v
-                                             (swap! results conj v)
-                                             (recur))))
-                                       @results)))
-                                   5 20))]
-               (print-comparison (format-comparison sync-slice async-slice)))))
-      done))))
+                                     (let [async-seq (await (set/async-slice async-set 400 499))]
+                                       (loop [s async-seq
+                                              count 0]
+                                         (if s
+                                           (let [v (await (set/-afirst s))]
+                                             (if v
+                                               (recur (await (set/-arest s)) (inc count))
+                                               count))
+                                           count)))))
+                                   warmup-runs iteration-runs))]
+               (print-comparison (format-comparison sync-slice async-slice))))))
+      done)))
 
 ;; Benchmark: Storage operations with different delays
 ;;(deftest bench-storage-delays
