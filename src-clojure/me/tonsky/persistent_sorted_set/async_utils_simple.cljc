@@ -1,7 +1,7 @@
 (ns me.tonsky.persistent-sorted-set.async-utils-simple
   "Simple utilities for async testing"
   (:require
-   [await-cps :refer [await]]
+   [await-cps :refer [await smart-trampoline]]
    [me.tonsky.persistent-sorted-set :as set])
   #?(:cljs
      (:require-macros
@@ -42,7 +42,7 @@
   (-delete [_ addresses] (swap! *store #(apply dissoc % addresses))))
 
 ;; Simple async storage with conditional immediate optimization
-(defrecord TestAsyncStorage [*store delay-ms]  
+(defrecord TestAsyncStorage [*store delay-ms]
   #?(:clj  me.tonsky.persistent_sorted_set.IStorage
      :cljs me.tonsky.persistent-sorted-set/IStorage)
   
@@ -65,17 +65,21 @@
         ;; Slow path: delay = async callback
         (js/setTimeout
           (fn []
-            (try
-              (if-let [{:keys [type keys addresses]} (get @*store address)]
-                (let [node (case type
-                            :node
-                            #?(:cljs (set/make-node-from-storage keys (vec addresses)))
-                            :leaf
-                            #?(:cljs (set/make-leaf-from-storage keys)))]
-                  (resolve node))
-                (raise (ex-info "Node not found" {:address address})))
-              (catch :default e
-                (raise e))))
+            #?(:cljs
+              ;; Wrap callback execution in smart-trampoline to restart await-cps context
+              (smart-trampoline
+                (fn []
+                  (try
+                    (if-let [{:keys [type keys addresses]} (get @*store address)]
+                      (let [node (case type
+                                  :node
+                                  (set/make-node-from-storage keys (vec addresses))
+                                  :leaf
+                                  (set/make-leaf-from-storage keys))]
+                        (resolve node))
+                      (raise (ex-info "Node not found" {:address address})))
+                    (catch :default e
+                      (raise e)))))))
           delay-ms))))
   
   (-store [_ node existing-address]
@@ -102,22 +106,26 @@
         ;; Slow path: delay = async callback
         (js/setTimeout
           (fn []
-            (try
-              (let [addr (or existing-address (random-uuid))
-                    data #?(:cljs (cond
-                                    (= (type node) set/Node)
-                                    {:type :node
-                                     :keys (.-keys node)
-                                     :addresses (when (.-addresses node) (vec (.-addresses node)))}
-                                    (= (type node) set/Leaf)
-                                    {:type :leaf
-                                     :keys (.-keys node)}
-                                    :else
-                                    (throw (ex-info "Unknown node type" {:node node}))))]
-                (swap! *store assoc addr data)
-                (resolve addr))
-              (catch :default e
-                (raise e))))
+            #?(:cljs
+              ;; Wrap callback execution in smart-trampoline to restart await-cps context
+              (smart-trampoline
+                (fn []
+                  (try
+                    (let [addr (or existing-address (random-uuid))
+                          data (cond
+                                 (= (type node) set/Node)
+                                 {:type :node
+                                  :keys (.-keys node)
+                                  :addresses (when (.-addresses node) (vec (.-addresses node)))}
+                                 (= (type node) set/Leaf)
+                                 {:type :leaf
+                                  :keys (.-keys node)}
+                                 :else
+                                 (throw (ex-info "Unknown node type" {:node node})))]
+                      (swap! *store assoc addr data)
+                      (resolve addr))
+                    (catch :default e
+                      (raise e)))))))
           delay-ms))))
   
   (-accessed [_ address] nil)
