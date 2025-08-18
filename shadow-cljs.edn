@@ -19,6 +19,36 @@
    :output-to        "target/test-await-cps-simple.js"
    :compiler-options {:infer-externs true}}
    
+  :test-async-transducers
+  {:target           :node-script
+   :main             test-async-transducers/-main
+   :output-to        "target/test-async-transducers.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-async-transducers-full
+  {:target           :node-script
+   :main             test-async-transducers-full/-main
+   :output-to        "target/test-async-transducers-full.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-async-transducers-simple
+  {:target           :node-script
+   :main             test-async-transducers-simple/-main
+   :output-to        "target/test-async-transducers-simple.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-async-sequence
+  {:target           :node-script
+   :main             test-async-sequence/-main
+   :output-to        "target/test-async-sequence.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-async-sequence-debug
+  {:target           :node-script
+   :main             test-async-sequence-debug/-main
+   :output-to        "target/test-async-sequence-debug.js"
+   :compiler-options {:infer-externs true}}
+   
   :benchmark-async
   {:target           :node-script
    :main             me.tonsky.persistent-sorted-set.test.benchmark-async/-main
@@ -431,6 +461,42 @@
   {:target           :node-script
    :main             test-sp-aliases/-main
    :output-to        "target/test-sp-aliases.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-transducer-debug
+  {:target           :node-script
+   :main             test-transducer-debug/test-transducer
+   :output-to        "target/test-transducer-debug.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-async-sequence-complete
+  {:target           :node-script
+   :main             test-async-sequence-complete/-main
+   :output-to        "target/test-async-sequence-complete.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-async-sequence-simple
+  {:target           :node-script
+   :main             test-async-sequence-simple/-main
+   :output-to        "target/test-async-sequence-simple.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-partition-debug
+  {:target           :node-script
+   :main             test-partition-debug/test-partition
+   :output-to        "target/test-partition-debug.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-partition-complete
+  {:target           :node-script
+   :main             test-partition-complete/-main
+   :output-to        "target/test-partition-complete.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-partition-debug-detailed
+  {:target           :node-script
+   :main             test-partition-debug-detailed/-main
+   :output-to        "target/test-partition-debug-detailed.js"
    :compiler-options {:infer-externs true}}
    
   :test-minimal-sp
