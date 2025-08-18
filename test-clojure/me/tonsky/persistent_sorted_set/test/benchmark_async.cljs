@@ -284,95 +284,93 @@
       done)))
 
 ;; Benchmark: Storage operations with different delays
-;;(deftest bench-storage-delays
-;;  (test/async done
-;;         (-> (async
-;;           (println "\n### Storage Operations with Delays ###")
-;;
-;;           (doseq [delay-ms [0 1 5]]
-;;             (println (str "\n--- Storage delay: " delay-ms "ms ---"))
-;;
-;;             (let [sync-storage (utils/make-sync-storage)
-;;                   async-storage (utils/make-async-storage delay-ms)
-;;
-;;                   ;; Build initial sets for each storage type
-;;                   sync-set (reduce set/conj
-;;                                    (set/sorted-set* {:storage sync-storage})
-;;                                    (range 500))
-;;                   async-set (await (reduce (fn [acc-ch v]
-;;                                          (async (let [acc (await acc-ch)]
-;;                                                (await (set/conj acc v compare {:sync? false})))))
-;;                                        (async (set/sorted-set* {:storage async-storage}))
-;;                                        (range 500)))]
-;;
-;;               ;; Store and restore benchmark
-;;               (let [sync-store-restore (run-benchmark
-;;                                         "Sync store+restore"
-;;                                         #(let [store-info (set/store-set sync-set)]
-;;                                            (set/restore store-info sync-storage))
-;;                                         2 10)
-;;
-;;                     async-store-restore (await (run-async-benchmark
-;;                                             "Async store+restore"
-;;                                             #(async
-;;                                               (let [store-info (await (set/store-set async-set {:sync? false}))]
-;;                                                 (await (set/restore store-info async-storage {:sync? false}))))
-;;                                             2 10))]
-;;                 (print-comparison (format-comparison sync-store-restore async-store-restore))))))
-;;          (.then (fn [_] (done)))
-;;          (.catch (fn [e] (println "Error:" e) (done))))))
+(deftest bench-storage-delays
+  (test/async done
+    (run-async-test
+      (fn [] (async
+        (println "\n### Storage Operations with Delays ###")
+
+        (doseq [delay-ms [0 1 5]]
+          (println (str "\n--- Storage delay: " delay-ms "ms ---"))
+
+          (let [sync-storage (utils/make-sync-storage)
+                async-storage (utils/make-async-storage delay-ms)
+
+                ;; Build initial sets for each storage type
+                sync-set (reduce set/conj
+                                 (set/sorted-set* {:storage sync-storage})
+                                 (range 500))
+                async-set (await (reduce (fn [acc-ch v]
+                                       (async (let [acc (await acc-ch)]
+                                             (await (set/conj acc v compare {:sync? false})))))
+                                     (async (set/sorted-set* {:storage async-storage}))
+                                     (range 500)))]
+
+            ;; Store and restore benchmark
+            (let [sync-store-restore (run-benchmark
+                                      "Sync store+restore"
+                                      #(let [store-info (set/store-set sync-set)]
+                                         (set/restore store-info sync-storage))
+                                      2 10)
+
+                  async-store-restore (await (run-async-benchmark
+                                          "Async store+restore"
+                                          #(async
+                                            (let [store-info (await (set/store-set async-set {:sync? false}))]
+                                              (await (set/restore store-info async-storage {:sync? false}))))
+                                          2 10))]
+              (print-comparison (format-comparison sync-store-restore async-store-restore)))))))
+      done)))
 
 ;; Benchmark: Lazy loading overhead
-;;(deftest bench-lazy-loading
-;;  (test/async done
-;;         (-> (async
-;;           (println "\n### Lazy Loading Overhead ###")
-;;
-;;           (let [sync-storage (utils/make-sync-storage)
-;;                 async-storage (utils/make-async-storage 1) ; Small delay to simulate I/O
-;;
-;;                 ;; Create and store a large set
-;;                 large-set (reduce set/conj
-;;                                   (set/sorted-set* {:storage sync-storage})
-;;                                   (range warmup-runs))
-;;                 sync-addr (set/store-set large-set)
-;;                 async-addr (await (set/store-set large-set {:sync? false}))
-;;
-;;                 ;; Restore lazy sets
-;;                 sync-lazy (set/restore sync-addr sync-storage
-;;                                        {:count warmup-runs :shift (.-shift large-set)})
-;;                 async-lazy (await (set/restore async-addr async-storage
-;;                                            {:count warmup-runs :shift (.-shift large-set) :sync? false}))]
-;;
-;;             ;; Benchmark: First access (cold)
-;;             (let [sync-first (run-benchmark
-;;                               "Sync first access (cold)"
-;;                               #(get sync-lazy test-runs)
-;;                               2 10)
-;;
-;;                   async-first (await (run-async-benchmark
-;;                                   "Async first access (cold)"
-;;                                   #(set/lookup-async async-lazy test-runs)
-;;                                   2 10))]
-;;               (print-comparison (format-comparison sync-first async-first)))
-;;
-;;             ;; Benchmark: Subsequent access (warm)
-;;             ;; Prime the cache first
-;;             (get sync-lazy test-runs)
-;;             (await (set/lookup-async async-lazy test-runs))
-;;
-;;             (let [sync-warm (run-benchmark
-;;                              "Sync access (warm cache)"
-;;                              #(get sync-lazy test-runs)
-;;                              5 20)
-;;
-;;                   async-warm (await (run-async-benchmark
-;;                                  "Async access (warm cache)"
-;;                                  #(async (await (set/lookup-async async-lazy test-runs)))
-;;                                  5 20))]
-;;               (print-comparison (format-comparison sync-warm async-warm))))
-;;        (.then (fn [_] (done)))
-;;        (.catch (fn [e] (println "Error in bench-single-operations:" e) (done))))))
+(deftest bench-lazy-loading
+  (test/async done
+    (run-async-test
+      (fn [] (async
+        (println "\n### Lazy Loading Overhead ###")
+
+        (let [sync-storage (utils/make-sync-storage)
+              async-storage (utils/make-async-storage 1) ; Small delay to simulate I/O
+
+              ;; Create and store a large set
+              large-set (reduce set/conj
+                                (set/sorted-set* {:storage sync-storage})
+                                (range 1000))
+              sync-addr (set/store-set large-set)
+              async-addr (await (set/store-set large-set {:sync? false}))
+
+              ;; Restore lazy sets
+              sync-lazy (set/restore sync-addr sync-storage)
+              async-lazy (await (set/restore async-addr async-storage {:sync? false}))]
+
+          ;; Benchmark: First access (cold)
+          (let [sync-first (run-benchmark
+                            "Sync first access (cold)"
+                            (fn [] (get sync-lazy 500))
+                            2 10)
+
+                async-first (await (run-async-benchmark
+                                "Async first access (cold)"
+                                (fn [] (set/lookup-async async-lazy 500))
+                                2 10))]
+            (print-comparison (format-comparison sync-first async-first)))
+
+          ;; Benchmark: Subsequent access (warm)
+          ;; Prime the cache first
+          (get sync-lazy 500)
+          (await (set/lookup-async async-lazy 500))
+
+          (let [sync-warm (run-benchmark
+                           "Sync access (warm cache)"
+                           (fn [] (get sync-lazy 500))
+                           5 20)
+
+                async-warm (await (run-async-benchmark
+                               "Async access (warm cache)"
+                               (fn [] (async (await (set/lookup-async async-lazy 500))))
+                               5 20))]
+            (print-comparison (format-comparison sync-warm async-warm))))))
+      done)))
 
 ;; Main function for node script
 (defn -main []

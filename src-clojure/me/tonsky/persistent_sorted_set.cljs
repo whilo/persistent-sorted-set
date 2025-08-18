@@ -1092,6 +1092,64 @@
                     res
                     (dec level))))))))))))
 
+(defn- node-requires-storage?
+  "Check if a node itself needs to be loaded from storage"
+  [node]
+  (and (instance? Node node)
+       (.-addresses node)           ; Has storage addresses
+       (nil? (.-pointers node))))   ; But pointers not loaded yet
+
+(defn- slice-path-requires-storage?
+  "Check if any nodes in the slice path need storage access.
+   This is the critical optimization - only check nodes that
+   the slice operation will actually traverse."
+  [^BTSet set node key-from key-to level]
+  (let [cmp (.-comparator set)
+        keys (.-keys node)]
+    (when (instance? Node node)
+      (let [keys-l (arrays/alength keys)
+            ;; Find which children the slice bounds span
+            from-idx (if key-from 
+                       (binary-search-l cmp keys (- keys-l 2) key-from)
+                       0)
+            to-idx   (if key-to
+                       (binary-search-r cmp keys (- keys-l 2) key-to)
+                       (dec (arrays/alength (.-addresses node))))]
+        
+        ;; Only check nodes that are actually in the slice path
+        (loop [idx from-idx]
+          (when (<= idx to-idx)
+            (let [;; Check if this child needs loading
+                  child-addr (when (.-addresses node)
+                               (arrays/aget (.-addresses node) idx))
+                  child-loaded? (when (.-pointers node)
+                                 (arrays/aget (.-pointers node) idx))]
+              (if (and child-addr (not child-loaded?))
+                ;; Found unloaded node in slice path
+                true
+                ;; This child is loaded, recurse if needed
+                (if (and child-loaded? (> level 1))
+                  ;; Recursively check this child's path requirements
+                  (or (slice-path-requires-storage? set child-loaded? key-from key-to (dec level))
+                      ;; Move to next child in slice range
+                      (recur (inc idx)))
+                  ;; Move to next child in slice range
+                  (recur (inc idx)))))))))))
+
+(defn requires-storage-access?
+  "Fast check if a slice operation will need to access storage.
+   Returns true if any nodes in the slice path are not loaded yet."
+  [^BTSet set key-from key-to]
+  (when (.-storage set)
+    (let [root (.-root set)
+          shift (.-shift set)]
+      (if (== 0 shift)
+        ;; Root is a leaf - check if it needs loading
+        (node-requires-storage? root)
+        ;; Tree traversal needed - check path nodes
+        (or (node-requires-storage? root)
+            (slice-path-requires-storage? set root key-from key-to shift))))))
+
 (defn -slice [^BTSet set key-from key-to comparator]
   (when-some [path (-seek* set key-from comparator)]
     (let [till-path (-rseek* set key-to comparator)]
