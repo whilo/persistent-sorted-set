@@ -4,8 +4,7 @@
    [cljs.test :refer-macros [deftest testing is] :as test]
    [await-cps :refer [await run-async]]
    [me.tonsky.persistent-sorted-set :as set]
-   [me.tonsky.persistent-sorted-set.test.async-utils :as utils]
-   )
+   [me.tonsky.persistent-sorted-set.test.async-utils :as utils])
   (:require-macros
    [await-cps :refer [async]]))
 

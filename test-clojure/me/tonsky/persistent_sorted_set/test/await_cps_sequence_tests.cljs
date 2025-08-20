@@ -20,32 +20,21 @@
            result))
        result))))
 
-(defn async-set' [s0]
-  (assert (instance? set/BTSet s0))
+(defn build-async-set []
   (async
-   (loop [acc s0
-          nums (range 10)]
-     (if-let [n (first nums)]
-       (recur (await (set/conj acc n compare {:sync? false}))
-         (rest nums))
-       acc))))
-
-(defn async-set [s0]
-  (async
-   (reduce (fn [s-promise n]
-             (async
-              (let [s (if (fn? s-promise)
-                        (await s-promise)
-                        s-promise)]
-                (await (set/conj s n compare {:sync? false})))))
-           s0
-           (range 10))))
+   (let [storage (utils/make-async-storage 0)
+         s0      (set/sorted-set* {:storage storage})]
+     (await
+      (reduce (fn [s-promise n]
+                (async
+                 (let [s (if (fn? s-promise) (await s-promise) s-promise)]
+                   (await (set/conj s n compare {:sync? false})))))
+              s0
+              (range 10))))))
 
 (defn do-sequence-test []
   (async
-   (let [storage (utils/make-async-storage 0)
-         s0 (set/sorted-set* {:storage storage})
-         async-set (await (async-set' s0))]
+   (let [async-set (await (build-async-set))]
      (and
       (testing "1. async-transduce with identity"
         (let [async-seq (await (set/async-slice async-set nil nil))
