@@ -168,7 +168,7 @@
       (fn [err]
         (js/console.warn "bench-single-operations failed")
         (is (nil? err))
-        (js/console.log (pr-str (Throwable->map err)))
+        (js/console.warn err)
         (done)))))
 
 (defn do-bulk-ops-bench []
@@ -205,7 +205,7 @@
       (fn [err]
         (js/console.warn "bench-bulk-operations failed")
         (is (nil? err))
-        (js/console.log (pr-str (Throwable->map err)))
+        (js/console.warn err)
         (done)))))
 
 (defn do-iteration-bench []
@@ -276,45 +276,51 @@
         (js/console.warn err)
         (done)))))
 
-;;; Benchmark: Storage operations with different delays
-; (deftest bench-storage-delays
-;   (test/async done
-;     (run-async-test
-;       (fn [] (async
-;         (println "\n### Storage Operations with Delays ###")
-;
-;         (doseq [delay-ms [0 1 5]]
-;           (println (str "\n--- Storage delay: " delay-ms "ms ---"))
-;
-;           (let [sync-storage (utils/make-sync-storage)
-;                 async-storage (utils/make-async-storage delay-ms)
-;
-;                 ;; Build initial sets for each storage type
-;                 sync-set (reduce set/conj
-;                                  (set/sorted-set* {:storage sync-storage})
-;                                  (range 500))
-;                 async-set (await (reduce (fn [acc-ch v]
-;                                        (async (let [acc (await acc-ch)]
-;                                              (await (set/conj acc v compare {:sync? false})))))
-;                                      (async (set/sorted-set* {:storage async-storage}))
-;                                      (range 500)))]
-;
-;             ;; Store and restore benchmark
-;             (let [sync-store-restore (run-benchmark
-;                                       "Sync store+restore"
-;                                       #(let [store-info (set/store-set sync-set)]
-;                                          (set/restore store-info sync-storage))
-;                                       2 10)
-;
-;                   async-store-restore (await (run-async-benchmark
-;                                           "Async store+restore"
-;                                           #(async
-;                                             (let [store-info (await (set/store-set async-set {:sync? false}))]
-;                                               (await (set/restore store-info async-storage {:sync? false}))))
-;                                           2 10))]
-;               (print-comparison (format-comparison sync-store-restore async-store-restore)))))))
-;       done)))
-;
+(defn do-bench-storage-delays []
+  (async
+   (println "\n### Storage Operations with Delays ###")
+   (doseq [delay-ms [0 1 5]]
+     (println (str "\n--- Storage delay: " delay-ms "ms ---"))
+     (let [sync-storage (utils/make-sync-storage)
+           async-storage (utils/make-async-storage delay-ms)
+
+           ;; Build initial sets for each storage type
+           sync-set (reduce set/conj
+                            (set/sorted-set* {:storage sync-storage})
+                            (range 500))
+           async-set (await (reduce (fn [acc-ch v]
+                                      (async (let [acc (await acc-ch)]
+                                               (await (set/conj acc v compare {:sync? false})))))
+                                    (async (set/sorted-set* {:storage async-storage}))
+                                    (range 500)))]
+
+       ;; Store and restore benchmark
+       (let [sync-store-restore (run-benchmark
+                                 "Sync store+restore"
+                                 #(let [store-info (set/store-set sync-set)]
+                                    (set/restore store-info sync-storage))
+                                 2 10)
+
+             async-store-restore (await (run-async-benchmark
+                                         "Async store+restore"
+                                         #(async
+                                           (let [store-info (await (set/store-set async-set {:sync? false}))]
+                                             (await (set/restore store-info async-storage {:sync? false}))))
+                                         2 10))]
+         (print-comparison (format-comparison sync-store-restore async-store-restore)))))))
+
+(deftest bench-storage-delays
+  (test/async done
+    (run-async (do-bench-storage-delays)
+      (fn [ok]
+        (js/console.info "bench-storage-delays success" err)
+        (done))
+      (fn [err]
+       (js/console.warn "bench-storage-delays failed")
+       (is (nil? err))
+        (js/console.warn err)
+        (done)))))
+
 ; ;; Benchmark: Lazy loading overhead
 ; (deftest bench-lazy-loading
 ;   (test/async done
