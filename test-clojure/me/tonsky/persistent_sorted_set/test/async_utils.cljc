@@ -59,27 +59,26 @@
           (catch :default e
             (raise e)))
         ;; Slow path: delay = async callback
-        (js/setTimeout
-          (fn []
-            #?(:cljs
-              ;; Wrap callback execution in smart-trampoline to restart await-cps context
+        #?(:clj (throw (Exception. "unimplemented"))
+           :cljs
+           (js/setTimeout
+            (fn []
               (smart-trampoline
-                (fn []
-                  (try
-                    (if-let [{:keys [type keys addresses]} (get @*store address)]
-                      (let [node (case type
+               (fn []
+                 (try
+                   (if-let [{:keys [type keys addresses]} (get @*store address)]
+                     (let [node (case type
                                   :node
                                   (set/make-node-from-storage keys (vec addresses))
                                   :leaf
                                   (set/make-leaf-from-storage keys))]
-                        (resolve node))
-                      (raise (ex-info "Node not found" {:address address})))
-                    (catch :default e
-                      (raise e)))))))
-          delay-ms))))
+                       (resolve node))
+                     (raise (ex-info "Node not found" {:address address})))
+                   (catch :default e
+                     (raise e))))))
+            delay-ms)))))
 
   (-store [_ node existing-address]
-    ;; Always use callback style, even with zero delay
     (fn [resolve raise]
       (if (zero? delay-ms)
         ;; Fast path: no delay = immediate callback
@@ -100,30 +99,30 @@
           (catch :default e
             (raise e)))
         ;; Slow path: delay = async callback
-        (js/setTimeout
-          (fn []
-            #?(:cljs
+        #?(:clj (throw (Exception. "unimplemented"))
+           :cljs
+           (js/setTimeout
+            (fn []
               ;; Wrap callback execution in smart-trampoline to restart await-cps context
               (smart-trampoline
-                (fn []
-                  (try
-                    (let [addr (or existing-address (random-uuid))
-                          data (cond
-                                 (= (type node) set/Node)
-                                 {:type :node
-                                  :keys (.-keys node)
-                                  :addresses (when (.-addresses node) (vec (.-addresses node)))}
-                                 (= (type node) set/Leaf)
-                                 {:type :leaf
-                                  :keys (.-keys node)}
-                                 :else
-                                 (throw (ex-info "Unknown node type" {:node node})))]
-                      (swap! *store assoc addr data)
-                      (resolve addr))
-                    (catch :default e
-                      (raise e)))))))
-          delay-ms))))
-
+               (fn []
+                 (try
+                   (let [addr (or existing-address (random-uuid))
+                         data (cond
+                                (= (type node) set/Node)
+                                {:type :node
+                                 :keys (.-keys node)
+                                 :addresses (when (.-addresses node) (vec (.-addresses node)))}
+                                (= (type node) set/Leaf)
+                                {:type :leaf
+                                 :keys (.-keys node)}
+                                :else
+                                (throw (ex-info "Unknown node type" {:node node})))]
+                     (swap! *store assoc addr data)
+                     (resolve addr))
+                   (catch :default e
+                     (raise e))))))
+            delay-ms)))))
   (-accessed [_ address] nil)
   (-delete [_ addresses] (swap! *store #(apply dissoc % addresses))))
 

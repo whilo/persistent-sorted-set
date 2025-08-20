@@ -1296,9 +1296,7 @@
               (cond
                 ;; Leaf node - just store it
                 (instance? Leaf node)
-                (async
-                  (let [addr (await (-store storage node nil))]
-                    addr))
+                (-store storage node opts)
 
                 ;; Branch node - store children first
                 (instance? Node node)

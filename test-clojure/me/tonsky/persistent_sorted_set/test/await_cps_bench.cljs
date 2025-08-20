@@ -115,7 +115,7 @@
          sync-set (reduce set/conj
                           (set/sorted-set* {:storage sync-storage})
                           (range 1000))
-         async-set (await (utils/build-async-set 1000))
+         async-set (await (utils/async-build-set 1000))
          warmup-runs 10000
          test-runs 5000]
      (assert (instance? set/BTSet sync-set))
@@ -164,7 +164,9 @@
 (deftest bench-single-operations
   (test/async done
     (run-async (do-single-ops-bench)
-      (fn [ok] (done))
+      (fn [ok]
+        (js/console.warn "bench-single-operations success" ok)
+        (done))
       (fn [err]
         (js/console.warn "bench-single-operations failed")
         (is (nil? err))
@@ -201,7 +203,9 @@
 (deftest bench-bulk-operations
   (test/async done
     (run-async (do-single-ops-bench)
-      (fn [ok] (done))
+      (fn [ok]
+        (js/console.info "bench-bulk-operations success" ok)
+        (done))
       (fn [err]
         (js/console.warn "bench-bulk-operations failed")
         (is (nil? err))
@@ -268,7 +272,7 @@
   (test/async done
     (run-async (do-iteration-bench)
       (fn [ok]
-        (js/console.info "bench-iteration success" err)
+        (js/console.info "bench-iteration success" ok)
         (done))
       (fn [err]
         (js/console.warn "bench-iteration failed")
@@ -313,7 +317,7 @@
   (test/async done
     (run-async (do-bench-storage-delays)
       (fn [ok]
-        (js/console.info "bench-storage-delays success" err)
+        (js/console.info "bench-storage-delays success" ok)
         (done))
       (fn [err]
        (js/console.warn "bench-storage-delays failed")
@@ -321,54 +325,54 @@
         (js/console.warn err)
         (done)))))
 
+
 (defn do-bench-lazy-loading []
   (async
    (println "\n### Lazy Loading Overhead ###")
    (let [sync-storage (utils/make-sync-storage)
          async-storage (utils/make-async-storage 1) ; Small delay to simulate I/O
-         ;; Create and store a large set
          large-set (reduce set/conj
                            (set/sorted-set* {:storage sync-storage})
                            (range 1000))
+         async-large-set (reduce set/conj
+                           (set/sorted-set* {:storage async-storage})
+                           (range 1000))
          sync-addr (set/store-set large-set)
-         async-addr (await (set/store-set large-set {:sync? false}))
+         async-addr (await (set/store-set async-large-set {:sync? false}))
          ; ;; Restore lazy sets
-         ; sync-lazy (set/restore sync-addr sync-storage)
-         ; async-lazy (await (set/restore async-addr async-storage {:sync? false}))
+         sync-lazy (set/restore sync-addr sync-storage)
+         async-lazy (await (set/restore async-addr async-storage {:sync? false}))
          ]
-     ;; Benchmark: First access (cold)
-     ; (let [sync-first (run-benchmark
-     ;                   "Sync first access (cold)"
-     ;                   (fn [] (get sync-lazy 500))
-     ;                   2 10)
-     ;
-     ;       async-first (await (run-async-benchmark
-     ;                           "Async first access (cold)"
-     ;                           (fn [] (set/lookup-async async-lazy 500))
-     ;                           2 10))]
-     ;   (print-comparison (format-comparison sync-first async-first)))
-     ;
-     ; ;; Benchmark: Subsequent access (warm)
-     ; ;; Prime the cache first
-     ; (get sync-lazy 500)
-     ; (await (set/lookup-async async-lazy 500))
-     ; (let [sync-warm (run-benchmark
-     ;                  "Sync access (warm cache)"
-     ;                  (fn [] (get sync-lazy 500))
-     ;                  5 20)
-     ;
-     ;       async-warm (await (run-async-benchmark
-     ;                          "Async access (warm cache)"
-     ;                          (fn [] (async (await (set/lookup-async async-lazy 500))))
-     ;                          5 20))]
-     ;   (print-comparison (format-comparison sync-warm async-warm)))
-     )))
+     (and
+      (testing "Benchmark: First access (cold)"
+        (let [sync-first (run-benchmark
+                          "Sync first access (cold)"
+                          (fn [] (get sync-lazy 500))
+                          2 10)
+              async-first (await (run-async-benchmark
+                                  "Async first access (cold)"
+                                  (fn [] (set/lookup-async async-lazy 500))
+                                  2 10))]
+          (print-comparison (format-comparison sync-first async-first))
+          true))
+      (testing "Benchmark: Subsequent access (warm)"
+        (get sync-lazy 500)
+        (await (set/lookup-async async-lazy 500))
+        (let [sync-warm (run-benchmark
+                         "Sync access (warm cache)"
+                         (fn [] (get sync-lazy 500))
+                         5 20)
+              async-warm (await (run-async-benchmark
+                                 "Async access (warm cache)"
+                                 (fn [] (async (await (set/lookup-async async-lazy 500))))
+                                 5 20))]
+          (print-comparison (format-comparison sync-warm async-warm))))))))
 
 (deftest bench-lazy-loading
   (test/async done
     (run-async (do-bench-lazy-loading)
       (fn [ok]
-        (js/console.info "bench-lazy-loading success" err)
+        (js/console.info "bench-lazy-loading success" ok)
         (done))
       (fn [err]
         (js/console.warn "bench-lazy-loading failed")
