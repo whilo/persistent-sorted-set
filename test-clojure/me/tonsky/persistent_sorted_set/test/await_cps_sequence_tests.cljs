@@ -24,7 +24,6 @@
   (async
    (let [async-set (await (utils/build-async-set 10))]
      (and
-      (println "async-set: " async-set)
       (testing "1. async-transduce with identity"
         (let [async-seq (await (set/async-slice async-set nil nil))
               result (await (at/async-transduce identity conj [] async-seq))]
