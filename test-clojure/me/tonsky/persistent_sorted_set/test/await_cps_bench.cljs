@@ -132,7 +132,6 @@
                               (fn [] (set/conj async-set 1001 compare {:sync? false}))
                               warmup-runs test-runs))]
        (print-comparison (format-comparison sync-conj async-conj)))
-
      ;; Benchmark: lookup existing element
      (let [sync-lookup (run-benchmark
                         "Sync lookup"
@@ -143,7 +142,6 @@
                                 (fn [] (async (await (set/lookup-async async-set 50))))
                                 warmup-runs test-runs))]
        (print-comparison (format-comparison sync-lookup async-lookup)))
-
      ;; Benchmark: contains? check
      (let [sync-contains (run-benchmark
                           "contains?"
@@ -154,7 +152,6 @@
                                   (fn [] (async (await (set/contains-async? async-set 50))))
                                   warmup-runs test-runs))]
        (print-comparison (format-comparison sync-contains async-contains)))
-
      ;; Benchmark: disj single element
      (let [sync-disj (run-benchmark
                       "disj"
@@ -176,39 +173,43 @@
         (js/console.log (pr-str (Throwable->map err)))
         (done)))))
 
-; ;; Benchmark: Bulk operations
-; (deftest bench-bulk-operations
-;  (test/async done
-;    ((async
-;      (println "\n### Bulk Operations ###")
-;
-;      (let [sync-storage (utils/make-sync-storage)
-;            async-storage (utils/make-async-storage 0)]
-;
-;        ;; Benchmark: Building sets of different sizes
-;        (doseq [n [100 1000 10000 100000]]
-;          (let [nums (shuffle (range n))
-;
-;                sync-build (run-benchmark
-;                            (str "Sync conj " n " elements")
-;                            #(reduce set/conj
-;                                     (set/sorted-set* {:storage sync-storage})
-;                                     nums)
-;                            2 10)
-;
-;                async-build (await (run-async-benchmark
-;                                    (str "Async conj " n " elements")
-;                                    (fn []
-;                                      (reduce (fn [s-ch num]
-;                                                (async (let [s (await s-ch)]
-;                                                         (await (set/conj s num compare {:sync? false})))))
-;                                              (async (set/sorted-set* {:storage async-storage}))
-;                                              nums))
-;                                    2 10))]
-;            (print-comparison (format-comparison sync-build async-build))))))
-;     (fn [_] (done))
-;     (fn [e] (println "Error in bench-bulk-operations:" e) (done)))))
-;
+(defn do-bulk-ops-bench []
+  (async
+   (println "\n### Bulk Operations ###")
+   (let [sync-storage (utils/make-sync-storage)
+         async-storage (utils/make-async-storage 0)]
+     ;; Benchmark: Building sets of different sizes
+     (doseq [n [100 1000 10000 100000]]
+       (let [nums (shuffle (range n))
+
+             sync-build (run-benchmark
+                         (str "Sync conj " n " elements")
+                         #(reduce set/conj
+                                  (set/sorted-set* {:storage sync-storage})
+                                  nums)
+                         2 10)
+
+             async-build (await (run-async-benchmark
+                                 (str "Async conj " n " elements")
+                                 (fn []
+                                   (reduce (fn [s-ch num]
+                                             (async (let [s (await s-ch)]
+                                                      (await (set/conj s num compare {:sync? false})))))
+                                           (async (set/sorted-set* {:storage async-storage}))
+                                           nums))
+                                 2 10))]
+         (print-comparison (format-comparison sync-build async-build)))))))
+
+(deftest bench-bulk-operations
+  (test/async done
+    (run-async (do-single-ops-bench)
+      (fn [ok] (done))
+      (fn [err]
+        (js/console.warn "bench-bulk-operations failed")
+        (is (nil? err))
+        (js/console.log (pr-str (Throwable->map err)))
+        (done)))))
+
 ; ;; Benchmark: Iteration
 ; (deftest bench-iteration
 ;   (test/async done
