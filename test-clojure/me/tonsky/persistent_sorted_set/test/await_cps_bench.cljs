@@ -1,11 +1,11 @@
-(ns me.tonsky.persistent-sorted-set.test.benchmark-async
+(ns me.tonsky.persistent-sorted-set.test.await-cps-bench
   "Benchmarks comparing synchronous vs asynchronous performance"
   (:require
    [cljs.test :refer-macros [deftest testing is] :as test]
    [await-cps :refer [await run-async]]
    [me.tonsky.persistent-sorted-set :as set]
-   [me.tonsky.persistent-sorted-set.async-utils-simple :as utils]
-   [cloroutine.impl :as i])
+   [me.tonsky.persistent-sorted-set.test.async-utils :as utils]
+   )
   (:require-macros
    [await-cps :refer [async]]))
 

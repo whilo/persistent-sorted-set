@@ -1,9 +1,7 @@
-(ns simple-cloroutine-benchmark
+(ns me.tonsky.persistent-sorted-set.test.cloroutine-bench
   (:require
-   [me.tonsky.persistent-sorted-set.async-await :refer [await promisify]]
-   [me.tonsky.persistent-sorted-set.async-utils :as utils])
-  (:require-macros
-   [me.tonsky.persistent-sorted-set.async-await :refer [async]]))
+   [me.tonsky.persistent-sorted-set.test.async-utils :as utils]
+   [me.tonsky.persistent-sorted-set.cloroutine :refer [await promisify] :refer-macros [async]]))
 
 (defn benchmark [name f iterations]
   (let [start (.now js/performance)]

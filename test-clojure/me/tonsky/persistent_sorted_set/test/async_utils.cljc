@@ -1,11 +1,7 @@
-(ns me.tonsky.persistent-sorted-set.async-utils-simple
+(ns me.tonsky.persistent-sorted-set.test.async-utils
   "Simple utilities for async testing"
-  (:require
-   [await-cps :refer [await smart-trampoline]]
-   [me.tonsky.persistent-sorted-set :as set])
-  #?(:cljs
-     (:require-macros
-      [await-cps :refer [async]])))
+  (:require [await-cps :refer [await smart-trampoline] :refer-macros [async]]
+            [me.tonsky.persistent-sorted-set :as set]))
 
 ;; Simple storage implementations for testing
 (defrecord TestSyncStorage [*store]
