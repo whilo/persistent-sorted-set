@@ -134,3 +134,15 @@
 (defn make-async-storage
   ([] (make-async-storage 10))
   ([delay-ms] (->TestAsyncStorage (atom {}) delay-ms)))
+
+(defn build-async-set [n]
+  (async
+   (let [storage (make-async-storage 0)
+         s0      (set/sorted-set* {:storage storage})]
+     (await
+      (reduce (fn [s-promise n]
+                (async
+                 (let [s (if (fn? s-promise) (await s-promise) s-promise)]
+                   (await (set/conj s n compare {:sync? false})))))
+              s0
+              n)))))

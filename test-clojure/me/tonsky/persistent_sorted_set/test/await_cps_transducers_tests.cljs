@@ -26,23 +26,9 @@
   ([to xform async-seq]
    (async (await (async-transduce xform conj to async-seq)))))
 
-(defn build-async-set
-  "Create a BTSet with values 0..9 asynchronously."
-  []
-  (async
-   (let [storage (utils/make-async-storage 0)
-         s0      (set/sorted-set* {:storage storage})]
-     (await
-      (reduce (fn [s-promise n]
-                (async
-                 (let [s (if (fn? s-promise) (await s-promise) s-promise)]
-                   (await (set/conj s n compare {:sync? false})))))
-              s0
-              (range 10))))))
-
 (defn do-tests []
   (async
-   (let [async-set (await (build-async-set))]
+   (let [async-set (await (utils/build-async-set 10))]
      (and
       (testing "1. identity"
         (let [aseq   (await (set/async-slice async-set nil nil))

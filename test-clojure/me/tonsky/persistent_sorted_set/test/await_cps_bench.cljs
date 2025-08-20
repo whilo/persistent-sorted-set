@@ -130,11 +130,7 @@
                     sync-set (reduce set/conj
                                      (set/sorted-set* {:storage sync-storage})
                                      (range 1000))
-                    async-set (await (reduce (fn [s-ch n]
-                                               (async (let [s (await s-ch)]
-                                                        (await (set/conj s n compare {:sync? false})))))
-                                             (async (set/sorted-set* {:storage async-storage}))
-                                             (range 1000)))
+                    async-set (utils/build-async-set 1000)
                     warmup-runs 10000   ; Full warmup with trampoline
                     test-runs 5000]     ; Representative sample size
 
