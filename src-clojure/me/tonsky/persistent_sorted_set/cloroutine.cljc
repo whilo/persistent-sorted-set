@@ -1,4 +1,4 @@
-(ns me.tonsky.persistent-sorted-set.async-await
+(ns me.tonsky.persistent-sorted-set.cloroutine
   "Drop-in replacements for missionary's sp and ? using cloroutine"
   (:refer-clojure :exclude [await])
   #?(:clj (:require [cloroutine.core :refer [cr]]
