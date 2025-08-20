@@ -2,7 +2,7 @@
       "A B-tree based persistent sorted set. Supports transients, custom comparators, fast iteration, efficient slices (iterator over a part of the set) and reverse slices. Almost a drop-in replacement for [[clojure.core/sorted-set]], the only difference being this one can't store nil."
       :author "Nikita Prokopov"}
  me.tonsky.persistent-sorted-set
-  (:refer-clojure :exclude [conj disj sorted-set sorted-set-by])
+  (:refer-clojure :exclude [conj disj sorted-set sorted-set-by iter])
   (:require
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
    [await-cps :refer [await]])
@@ -130,7 +130,7 @@
     (==
       (unsigned-bit-shift-right path1 bits-per-level)
       (unsigned-bit-shift-right path2 bits-per-level))
-    (== 
+    (==
       (Math/floor (/ path1 max-len))
       (Math/floor (/ path2 max-len)))))
 
@@ -527,8 +527,8 @@
   (-pr-writer [this writer opts]
     (pr-sequential-writer writer pr-writer "#{" " " "}" opts (seq this))))
 
-(defn- ensure-child 
-  "Get child at index, with lazy restoration if needed. 
+(defn- ensure-child
+  "Get child at index, with lazy restoration if needed.
    When storage is provided, supports lazy restoration.
    In sync mode returns child directly, in async mode returns channel."
   ([node idx]
@@ -554,7 +554,7 @@
                              child))))))))))
 
 
-(defn- keys-for 
+(defn- keys-for
   "Returns keys array for the leaf node at the given path.
    In sync mode returns keys directly, in async mode returns channel."
   ([set path]
@@ -574,7 +574,7 @@
              (.-keys node))))))))
 
 
-(defn alter-btset 
+(defn alter-btset
   ([^BTSet set root shift cnt]
    (BTSet. root shift cnt (.-comparator set) (.-meta set) uninitialized-hash (.-storage set)))
   ([^BTSet set root shift cnt cmp]
@@ -582,7 +582,7 @@
 
 ;; iteration
 
-(defn- -next-path 
+(defn- -next-path
   "Returns next path or nil if at end. In sync mode returns path directly, in async mode returns channel."
   ([set node ^number path ^number level]
    (-next-path set node path level {:sync? true}))
@@ -673,7 +673,7 @@
                     (-rpath (.-root set) empty-path (.-shift set) (.-storage set))
                     (-rpath (.-root set) empty-path (.-shift set)))))))
 
-(defn- -prev-path 
+(defn- -prev-path
   "Returns previous path or nil if at beginning. In sync mode returns path directly, in async mode returns channel."
   ([set node ^number path ^number level]
    (-prev-path set node path level {:sync? true}))
@@ -1029,7 +1029,7 @@
   "Returns path to first element >= key,
    or nil if all elements in a set < key.
    In sync mode returns path directly, in async mode returns channel."
-  ([^BTSet set key comparator] 
+  ([^BTSet set key comparator]
    (-seek* set key comparator {:sync? true}))
   ([^BTSet set key comparator opts]
    (let [{:keys [sync?] :or {sync? true}} opts]
@@ -1109,13 +1109,13 @@
     (when (instance? Node node)
       (let [keys-l (arrays/alength keys)
             ;; Find which children the slice bounds span
-            from-idx (if key-from 
+            from-idx (if key-from
                        (binary-search-l cmp keys (- keys-l 2) key-from)
                        0)
             to-idx   (if key-to
                        (binary-search-r cmp keys (- keys-l 2) key-to)
                        (dec (arrays/alength (.-addresses node))))]
-        
+
         ;; Only check nodes that are actually in the slice path
         (loop [idx from-idx]
           (when (<= idx to-idx)
@@ -1188,9 +1188,9 @@
               ;; Don't pass keys - will be loaded lazily for new leaf
               (AsyncSeq. set next-path till-path nil nil)))))))
 
-  
+
   Object
-  (toString [this] 
+  (toString [this]
     (str "AsyncSeq[" (path-str path) " -> " (path-str till-path) "]"))
 
   IPrintWithWriter
@@ -1207,7 +1207,7 @@
 (defn -async-slice
   "Async version of slice that returns an AsyncSeq."
   [^BTSet set key-from key-to comparator]
-  (async 
+  (async
     (when-some [path (await (-seek* set key-from comparator {:sync? false}))]
       (let [till-path (await (-rseek* set key-to comparator {:sync? false}))]
         (async-seq set path till-path)))))
@@ -1278,12 +1278,12 @@
 (declare store-node)
 
 ;; Helper functions for creating nodes from storage
-(defn make-node-from-storage 
+(defn make-node-from-storage
   "Create a Node with addresses for lazy restoration"
   [keys addresses]
   (Node. keys nil (into-array addresses) nil))
 
-(defn make-leaf-from-storage 
+(defn make-leaf-from-storage
   "Create a Leaf from stored data"
   [keys]
   (Leaf. keys nil))
@@ -1398,7 +1398,7 @@
    (-async-slice set key-from key-to comparator)))
 
 ;; TODO: Implement async-rslice similar to async-slice
-;; Would return a Promise resolving to a reverse-ordered vector of elements 
+;; Would return a Promise resolving to a reverse-ordered vector of elements
 
 (defn rslice
   "A reverse iterator for part of the set with provided boundaries.

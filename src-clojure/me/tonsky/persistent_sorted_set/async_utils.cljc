@@ -23,7 +23,7 @@
 (defrecord TestSyncStorage [*store]
   #?(:clj  me.tonsky.persistent_sorted_set.IStorage
      :cljs me.tonsky.persistent-sorted-set/IStorage)
-  
+
   (-restore [this address]
     ;; Sync storage returns normal values for sync code compatibility
     (if-let [{:keys [type keys addresses]} (get @*store address)]
@@ -31,11 +31,11 @@
         :node
         ;; Create Node with addresses for lazy restoration (following Java pattern)
         #?(:cljs (set/make-node-from-storage keys (vec addresses)))
-        
+
         :leaf
         #?(:cljs (set/make-leaf-from-storage keys)))
       (throw (ex-info "Node not found" {:address address}))))
-  
+
   (-store [_ node existing-address]
     ;; Sync storage returns normal values for sync code compatibility
     (let [addr (or existing-address (random-uuid))
@@ -50,26 +50,26 @@
                               {:type :node
                                :keys (.-keys node)
                                :addresses []})])  ;; Empty addresses for now
-                 
+
                  ;; Leaf node
                  #?@(:cljs [(= (type node) set/Leaf)
                             {:type :leaf
                              :keys (.-keys node)}])
-                 
+
                  :else
                  (throw (ex-info "Unknown node type for storage" {:node node})))]
       (swap! *store assoc addr data)
       addr))
-  
+
   (-accessed [_ address] nil)
-  
+
   (-delete [_ addresses]
     (swap! *store #(apply dissoc % addresses))))
 
 (defrecord TestAsyncStorage [*store delay-ms]
   #?(:clj  me.tonsky.persistent_sorted_set.IStorage
      :cljs me.tonsky.persistent-sorted-set/IStorage)
-  
+
   (-restore [this address]
     ;; Optimization: return immediate value if no delay, callback if delay
     (if (zero? delay-ms)
@@ -80,20 +80,20 @@
             :node
             ;; Create Node with addresses for lazy restoration (following Java pattern)
             #?(:cljs (set/make-node-from-storage keys (vec addresses)))
-            
+
             :leaf
             #?(:cljs (set/make-leaf-from-storage keys)))
           (throw (ex-info "Node not found" {:address address}))))
       ;; Slow path: delay = callback function
       (fn [resolve raise]
-        (js/setTimeout 
+        (js/setTimeout
           (fn []
             (try
               (if-let [{:keys [type keys addresses]} (get @*store address)]
                 (let [node (case type
                             :node
                             #?(:cljs (set/make-node-from-storage keys (vec addresses)))
-                            
+
                             :leaf
                             #?(:cljs (set/make-leaf-from-storage keys)))]
                   (resolve node))
@@ -101,7 +101,7 @@
               (catch :default e
                 (raise e))))
           delay-ms))))
-  
+
   (-store [_ node existing-address]
     ;; Optimization: return immediate value if no delay, callback if delay
     (if (zero? delay-ms)
@@ -119,17 +119,17 @@
                                   {:type :node
                                    :keys (.-keys node)
                                    :addresses []})])  ;; Empty addresses for now
-                     
+
                      ;; Leaf node
                      #?@(:cljs [(= (type node) set/Leaf)
                                 {:type :leaf
                                  :keys (.-keys node)}])
-                     
+
                      :else
                      (throw (ex-info "Unknown node type for storage" {:node node})))]
           (swap! *store assoc addr data)
           addr))
-      ;; Slow path: delay = callback function  
+      ;; Slow path: delay = callback function
       (fn [resolve raise]
         (js/setTimeout
           (fn []
@@ -146,12 +146,12 @@
                                         {:type :node
                                          :keys (.-keys node)
                                          :addresses []})])  ;; Empty addresses for now
-                           
+
                            ;; Leaf node
                            #?@(:cljs [(= (type node) set/Leaf)
                                       {:type :leaf
                                        :keys (.-keys node)}])
-                           
+
                            :else
                            (throw (ex-info "Unknown node type for storage" {:node node})))]
                 (swap! *store assoc addr data)
@@ -159,10 +159,10 @@
               (catch :default e
                 (raise e))))
           delay-ms))))
-  
+
   (-accessed [_ address]
     (async nil))
-  
+
   (-delete [_ addresses]
     (async
       (when (pos? delay-ms)
@@ -173,7 +173,7 @@
 (defn make-sync-storage []
   (->TestSyncStorage (atom {})))
 
-(defn make-async-storage 
+(defn make-async-storage
   ([] (make-async-storage 10))
   ([delay-ms] (->TestAsyncStorage (atom {}) delay-ms)))
 
@@ -182,10 +182,10 @@
   [access-log]
   (let [store (atom {})
         id-counter (atom 0)]
-    (reify 
+    (reify
       #?(:clj  me.tonsky.persistent_sorted_set.IStorage
          :cljs me.tonsky.persistent-sorted-set/IStorage)
-      
+
       (-store [this node address]
         (async
           (let [address (or address (str "node-" (swap! id-counter inc)))
@@ -195,16 +195,16 @@
                                    :keys (vec (.-keys node))
                                    :addresses (when (.-addresses node)
                                                 (vec (.-addresses node)))}])
-                       
+
                        #?@(:cljs [(= (type node) set/Leaf)
                                   {:type :leaf
                                    :keys (vec (.-keys node))}])
-                       
+
                        :else
                        (throw (ex-info "Unknown node type" {:node node})))]
             (swap! store assoc address data)
             address)))
-      
+
       (-restore [this address]
         (async
           (swap! access-log conj address)
@@ -213,15 +213,15 @@
               :node
               ;; Create Node with addresses for lazy restoration (following Java pattern)
               #?(:cljs (set/make-node-from-storage keys addresses))
-              
+
               :leaf
               #?(:cljs (set/make-leaf-from-storage keys)))
             (throw (ex-info "Node not found" {:address address})))))
-      
+
       (-accessed [this address]
         ;; Record access
         nil)
-      
+
       (-delete [this addresses]
         (swap! store #(apply dissoc % addresses))))))
 
@@ -230,10 +230,10 @@
   [access-log]
   (let [store (atom {})
         id-counter (atom 0)]
-    (reify 
+    (reify
       #?(:clj  me.tonsky.persistent_sorted_set.IStorage
          :cljs me.tonsky.persistent-sorted-set/IStorage)
-      
+
       (-store [this node address]
         (let [address (or address (str "node-" (swap! id-counter inc)))
               data (cond
@@ -242,16 +242,16 @@
                                  :keys (vec (.-keys node))
                                  :addresses (when (.-addresses node)
                                               (vec (.-addresses node)))}])
-                     
+
                      #?@(:cljs [(= (type node) set/Leaf)
                                 {:type :leaf
                                  :keys (vec (.-keys node))}])
-                     
+
                      :else
                      (throw (ex-info "Unknown node type" {:node node})))]
           (swap! store assoc address data)
           address))
-      
+
       (-restore [this address]
         (swap! access-log conj address)
         (if-let [{:keys [type keys addresses]} (get @store address)]
@@ -259,14 +259,14 @@
             :node
             ;; Create Node with addresses for lazy restoration (following Java pattern)
             #?(:cljs (set/make-node-from-storage keys addresses))
-            
+
             :leaf
             #?(:cljs (set/make-leaf-from-storage keys)))
           (throw (ex-info "Node not found" {:address address}))))
-      
+
       (-accessed [this address]
         ;; Record access
         nil)
-      
+
       (-delete [this addresses]
         (swap! store #(apply dissoc % addresses))))))))

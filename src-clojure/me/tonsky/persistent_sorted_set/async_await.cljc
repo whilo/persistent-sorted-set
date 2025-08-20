@@ -18,10 +18,10 @@
 (defn await-internal
   "Internal await that always suspends via cloroutine. Only call with actual Promises."
   [promise]
-  #?(:cljs 
+  #?(:cljs
      (let [current-fiber *fiber*]
        ;; Register fiber with Promise
-       (.then promise 
+       (.then promise
               (fn [value] (current-fiber current-fiber value nil))
               (fn [error] (current-fiber current-fiber nil error)))
        ;; Always return nil to suspend the coroutine
@@ -47,16 +47,16 @@
   "Converts a callback-based async function to a Promise"
   [callback-fn]
   #?(:cljs
-     (js/Promise. 
+     (js/Promise.
       (fn [resolve reject]
         (callback-fn resolve reject)))
      :default (throw (ex-info "promisify only supported in ClojureScript" {}))))
 
-(defn thunk 
+(defn thunk
   "Resume function - returns the value or throws the error"
-  [] 
-  (if-some [e *error*] 
-    (throw e) 
+  []
+  (if-some [e *error*]
+    (throw e)
     *value*))
 
 ;; Direct translation of the Java CompletableFuture example to JavaScript Promise
@@ -65,12 +65,12 @@
     (let [expanded-body (clojure.walk/macroexpand-all `(do ~@body))]
       `(let [resolve-fn# (atom nil)
              reject-fn# (atom nil)
-             promise# (js/Promise. 
+             promise# (js/Promise.
                         (fn [resolve# reject#]
                           (reset! resolve-fn# resolve#)
                           (reset! reject-fn# reject#)))
              cr# (cr {await-internal thunk}
-                   (try 
+                   (try
                      (@resolve-fn# ~expanded-body)
                      (catch :default e#
                        (@reject-fn# e#))))]
@@ -98,11 +98,11 @@
 #?(:cljs
    (extend-type js/Promise
      IFn
-     (-invoke 
+     (-invoke
        ;; Called with no args - cancel (returns nil like missionary)
        ([this] nil)
        ;; Called with success callback only
-       ([this success] 
+       ([this success]
         (.then this success))
        ;; Called with success and failure callbacks
        ([this success failure]

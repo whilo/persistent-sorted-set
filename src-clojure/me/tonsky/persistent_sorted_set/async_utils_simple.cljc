@@ -11,7 +11,7 @@
 (defrecord TestSyncStorage [*store]
   #?(:clj  me.tonsky.persistent_sorted_set.IStorage
      :cljs me.tonsky.persistent-sorted-set/IStorage)
-  
+
   (-restore [this address]
     ;; Sync storage returns normal values for sync code compatibility
     (if-let [{:keys [type keys addresses]} (get @*store address)]
@@ -21,7 +21,7 @@
         :leaf
         #?(:cljs (set/make-leaf-from-storage keys)))
       (throw (ex-info "Node not found" {:address address}))))
-  
+
   (-store [_ node existing-address]
     ;; Sync storage returns normal values for sync code compatibility
     (let [addr (or existing-address (random-uuid))
@@ -37,7 +37,7 @@
                           (throw (ex-info "Unknown node type" {:node node}))))]
       (swap! *store assoc addr data)
       addr))
-  
+
   (-accessed [_ address] nil)
   (-delete [_ addresses] (swap! *store #(apply dissoc % addresses))))
 
@@ -45,7 +45,7 @@
 (defrecord TestAsyncStorage [*store delay-ms]
   #?(:clj  me.tonsky.persistent_sorted_set.IStorage
      :cljs me.tonsky.persistent-sorted-set/IStorage)
-  
+
   (-restore [this address]
     ;; Always use callback style, even with zero delay
     (fn [resolve raise]
@@ -81,7 +81,7 @@
                     (catch :default e
                       (raise e)))))))
           delay-ms))))
-  
+
   (-store [_ node existing-address]
     ;; Always use callback style, even with zero delay
     (fn [resolve raise]
@@ -127,7 +127,7 @@
                     (catch :default e
                       (raise e)))))))
           delay-ms))))
-  
+
   (-accessed [_ address] nil)
   (-delete [_ addresses] (swap! *store #(apply dissoc % addresses))))
 
@@ -135,6 +135,6 @@
 (defn make-sync-storage []
   (->TestSyncStorage (atom {})))
 
-(defn make-async-storage 
+(defn make-async-storage
   ([] (make-async-storage 10))
   ([delay-ms] (->TestAsyncStorage (atom {}) delay-ms)))

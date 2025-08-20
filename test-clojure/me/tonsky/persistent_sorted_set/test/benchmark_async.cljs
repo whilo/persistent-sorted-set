@@ -40,7 +40,7 @@
   ;; Warmup
   (dotimes [_ warmup-runs]
     (f))
-  
+
   ;; Actual measurements
   (let [timings (atom [])]
     (dotimes [_ test-runs]
@@ -48,7 +48,7 @@
         (f)
         (let [end (now)]
           (swap! timings conj (- end start)))))
-    
+
     (let [times @timings]
       {:name name
        :mean (mean times)
@@ -68,7 +68,7 @@
     ;; Warmup
     (dotimes [_ warmup-runs]
       (await (f)))
-    
+
     ;; Actual measurements
     (let [timings (atom [])]
       (dotimes [_ test-runs]
@@ -76,7 +76,7 @@
           (await (f))
           (let [end (now)]
             (swap! timings conj (- end start)))))
-      
+
       (let [times @timings]
         {:name name
          :mean (mean times)
@@ -102,7 +102,7 @@
                 " median=" (.toFixed (:median (:sync comparison)) 3) "ms"
                 " p95=" (.toFixed (:p95 (:sync comparison)) 3) "ms"))
   (println (str "Async: mean=" (.toFixed (:mean (:async comparison)) 3) "ms"
-                " median=" (.toFixed (:median (:async comparison)) 3) "ms"  
+                " median=" (.toFixed (:median (:async comparison)) 3) "ms"
                 " p95=" (.toFixed (:p95 (:async comparison)) 3) "ms"))
   (println (str "Overhead: " (.toFixed (:overhead-factor comparison) 2) "x"
                 " (" (if (pos? (:overhead-percent comparison)) "+" "")
@@ -112,7 +112,7 @@
 (defn- run-async-test [async-fn done]
   (let [result (async-fn)]
     ;; Always use unified callback approach - result is always a CPS function
-    (run-async result 
+    (run-async result
       (fn [_] (done))           ; success callback
       (fn [e] (js/console.error "Error:" e) (done))))) ; error callback
 

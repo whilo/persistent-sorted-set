@@ -99,7 +99,7 @@
       ;; Ensure buffer has element at idx
       (when (await (-ensure-buffer! state idx))
         (nth @(.-buffer state) idx))))
-  
+
   (-arest [_]
     (async
       ;; Check if current element exists before returning rest
@@ -110,7 +110,7 @@
 (defn async-sequence
   "Transform an AsyncSeq with a transducer, returning a new lazy AsyncSeq.
    The transducer is applied lazily as elements are consumed.
-   
+
    Example:
    (async-sequence (map inc) async-seq)
    (async-sequence (filter even?) async-seq)
@@ -121,7 +121,7 @@
           buffer (volatile! [])
           source-ref (volatile! source-seq)
           completed? (volatile! false)
-          
+
           ;; Create the step function that collects into buffer
           step (fn
                  ([] nil)  ; Init (not used)
@@ -130,11 +130,11 @@
                  ([result input]  ; Step - collect input and return result
                   (vswap! buffer conj input)
                   result))
-          
+
           ;; Apply transducer to step function
           xf (xform step)
-          
+
           ;; Create the shared state object
           state (->TransducerState xf source-ref buffer completed?)]
-      
+
       (TransducedAsyncSeq. state 0))))
