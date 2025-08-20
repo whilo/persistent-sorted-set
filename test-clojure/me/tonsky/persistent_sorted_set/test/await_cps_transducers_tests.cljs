@@ -72,4 +72,8 @@
   (test/async done
     (run-async (do-tests)
       (fn [_] (done))
-      (fn [_] (done)))))
+      (fn [err]
+        (js/console.warn "transducer-sequence-test failure")
+        (is (nil? err))
+        (js/console.log (pr-str (Throwable->map err)))
+        (done)))))

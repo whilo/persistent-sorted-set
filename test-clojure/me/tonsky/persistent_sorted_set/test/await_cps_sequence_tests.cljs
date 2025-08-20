@@ -24,6 +24,7 @@
   (async
    (let [async-set (await (utils/build-async-set 10))]
      (and
+      (println "async-set: " async-set)
       (testing "1. async-transduce with identity"
         (let [async-seq (await (set/async-slice async-set nil nil))
               result (await (at/async-transduce identity conj [] async-seq))]
@@ -86,10 +87,9 @@
 (deftest sequence-test
   (test/async done
     (run-async (do-sequence-test)
-      (fn [ok]
-        (js/console.info "sequence-test success")
-        (done))
+      (fn [ok] (done))
       (fn [err]
         (js/console.warn "sequence-test failure")
-        (js/console.log (Throwable->map err))
+        (is (nil? err))
+        (js/console.log (pr-str (Throwable->map err)))
         (done)))))

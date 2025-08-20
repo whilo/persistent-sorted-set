@@ -145,4 +145,4 @@
                  (let [s (if (fn? s-promise) (await s-promise) s-promise)]
                    (await (set/conj s n compare {:sync? false})))))
               s0
-              n)))))
+              (range n))))))
