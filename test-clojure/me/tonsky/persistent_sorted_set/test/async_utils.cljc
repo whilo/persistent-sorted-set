@@ -135,7 +135,7 @@
   ([] (make-async-storage 10))
   ([delay-ms] (->TestAsyncStorage (atom {}) delay-ms)))
 
-(defn build-async-set [n]
+(defn async-build-set [n]
   (async
    (let [storage (make-async-storage 0)
          s0      (set/sorted-set* {:storage storage})]

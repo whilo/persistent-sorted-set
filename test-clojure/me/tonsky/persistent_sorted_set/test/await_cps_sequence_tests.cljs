@@ -22,7 +22,7 @@
 
 (defn do-sequence-test []
   (async
-   (let [async-set (await (utils/build-async-set 10))]
+   (let [async-set (await (utils/async-build-set 10))]
      (and
       (testing "1. async-transduce with identity"
         (let [async-seq (await (set/async-slice async-set nil nil))

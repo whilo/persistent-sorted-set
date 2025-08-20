@@ -2,15 +2,13 @@
   "Benchmarks comparing synchronous vs asynchronous performance"
   (:require
    [cljs.test :refer-macros [deftest testing is] :as test]
-   [await-cps :refer [await run-async]]
+   [await-cps :refer [await run-async] :refer-macros [async]]
+   [clojure.string :as string]
    [me.tonsky.persistent-sorted-set :as set]
-   [me.tonsky.persistent-sorted-set.test.async-utils :as utils])
-  (:require-macros
-   [await-cps :refer [async]]))
+   [me.tonsky.persistent-sorted-set.test.async-utils :as utils]))
 
 ;; Benchmark utilities
-(defn- now []
-  (js/performance.now))
+(defn- now [] (js/performance.now))
 
 (defn- mean [nums]
   (/ (reduce + nums) (count nums)))
@@ -210,73 +208,75 @@
         (js/console.log (pr-str (Throwable->map err)))
         (done)))))
 
-; ;; Benchmark: Iteration
-; (deftest bench-iteration
-;   (test/async done
-;     (run-async-test
-;       (fn [] (async
-;         (println "\n### Iteration Performance ###")
-;
-;            (let [sync-storage (utils/make-sync-storage)
-;                  async-storage (utils/make-async-storage 0)
-;
-;                  warmup-runs 500
-;                  iteration-runs 2000
-;
-;                  ;; Create test sets
-;                  sync-set (reduce set/conj
-;                                   (set/sorted-set* {:storage sync-storage})
-;                                   (range 1000))
-;                  async-set (await (reduce (fn [s-ch n]
-;                                         (async (let [s (await s-ch)]
-;                                               (await (set/conj s n compare {:sync? false})))))
-;                                       (async (set/sorted-set* {:storage async-storage}))
-;                                       (range 1000)))]
-;
-;              ;; Benchmark: Full iteration
-;              (let [sync-iter (run-benchmark
-;                               "Sync full iteration"
-;                               (fn [] (doall (seq sync-set)))
-;                               warmup-runs iteration-runs)
-;
-;                    async-iter (await (run-async-benchmark
-;                                   "Async full iteration"
-;                                   (fn [] (async
-;                                     (let [async-seq (await (set/async-slice async-set nil nil))]
-;                                       (loop [s async-seq
-;                                              count 0]
-;                                         (if s
-;                                           (let [v (await (set/-afirst s))]
-;                                             (if v
-;                                               (recur (await (set/-arest s)) (inc count))
-;                                               count))
-;                                           count)))))
-;                                   warmup-runs iteration-runs))]
-;                (print-comparison (format-comparison sync-iter async-iter)))
-;
-;              ;; Benchmark: Slice iteration (100 elements)
-;              (let [sync-slice (run-benchmark
-;                                "Sync slice (100 elements)"
-;                                (fn [] (doall (set/slice sync-set 400 499)))
-;                                5 20)
-;
-;                    async-slice (await (run-async-benchmark
-;                                    "Async slice (100 elements)"
-;                                    (fn [] (async
-;                                      (let [async-seq (await (set/async-slice async-set 400 499))]
-;                                        (loop [s async-seq
-;                                               count 0]
-;                                          (if s
-;                                            (let [v (await (set/-afirst s))]
-;                                              (if v
-;                                                (recur (await (set/-arest s)) (inc count))
-;                                                count))
-;                                            count)))))
-;                                    warmup-runs iteration-runs))]
-;                (print-comparison (format-comparison sync-slice async-slice))))))
-;       done)))
-;
-; ;; Benchmark: Storage operations with different delays
+(defn do-iteration-bench []
+  (async
+   (println "\n### Iteration Performance ###")
+   ; (await (async (is (= 1 1))))
+   (let [sync-storage (utils/make-sync-storage)
+         async-storage (utils/make-async-storage 0) ; Zero delay for pure overhead measurement
+         sync-set (reduce set/conj
+                          (set/sorted-set* {:storage sync-storage})
+                          (range 1000))
+         async-set (await (utils/async-build-set 1000))
+         warmup-runs 500
+         iteration-runs 2000]
+     (assert (instance? set/BTSet sync-set))
+     (assert (instance? set/BTSet async-set))
+     (and
+      (testing "Benchmark: Full iteration"
+        (let [sync-iter (run-benchmark
+                         "Sync full iteration"
+                         (fn [] (doall (seq sync-set)))
+                         warmup-runs iteration-runs)
+              async-iter (await (run-async-benchmark
+                                 "Async full iteration"
+                                 (fn [] (async
+                                         (let [async-seq (await (set/async-slice async-set nil nil))]
+                                           (loop [s async-seq
+                                                  count 0]
+                                             (if s
+                                               (let [v (await (set/-afirst s))]
+                                                 (if v
+                                                   (recur (await (set/-arest s)) (inc count))
+                                                   count))
+                                               count)))))
+                                 warmup-runs iteration-runs))]
+          (print-comparison (format-comparison sync-iter async-iter))
+          true))
+      (testing "Benchmark: Slice iteration (100 elements)"
+        (let [sync-slice (run-benchmark
+                          "Sync slice (100 elements)"
+                          (fn [] (doall (set/slice sync-set 400 499)))
+                          5 20)
+              async-slice (await (run-async-benchmark
+                                  "Async slice (100 elements)"
+                                  (fn [] (async
+                                          (let [async-seq (await (set/async-slice async-set 400 499))]
+                                            (loop [s async-seq
+                                                   count 0]
+                                              (if s
+                                                (let [v (await (set/-afirst s))]
+                                                  (if v
+                                                    (recur (await (set/-arest s)) (inc count))
+                                                    count))
+                                                count)))))
+                                  warmup-runs iteration-runs))]
+          (print-comparison (format-comparison sync-slice async-slice))
+          true))))))
+
+(deftest bench-iteration
+  (test/async done
+    (run-async (do-iteration-bench)
+      (fn [ok]
+        (js/console.info "bench-iteration success" err)
+        (done))
+      (fn [err]
+        (js/console.warn "bench-iteration failed")
+        (is (nil? err))
+        (js/console.warn err)
+        (done)))))
+
+;;; Benchmark: Storage operations with different delays
 ; (deftest bench-storage-delays
 ;   (test/async done
 ;     (run-async-test
