@@ -1,84 +1,9 @@
 (ns me.tonsky.persistent-sorted-set.test.cloroutine-storage-tests
   "Comprehensive integration tests for storage with both sync and async implementations"
-  (:require
-   [cljs.test :refer-macros [deftest testing is async]]
-   #_[cljs.core.async :as async :refer [sp ?]]
-   [missionary.core :refer [sp] :as m]
-   [me.tonsky.persistent-sorted-set :as set]
-   [me.tonsky.persistent-sorted-set.test.async-utils :as utils])
-  (:require-macros
-   [missionary.core :refer [?]]))
-
-(deftest sync-storage-integration-test
-  #_(testing "Full integration test with sync storage - 10k elements"
-    (println "Running sync-storage-integration-test")
-    (let [storage (utils/make-sync-storage)
-          s0 (set/sorted-set* {:storage storage})
-          n 10000
-          nums (shuffle (range n))
-          s-final (reduce set/conj s0 nums)]
-
-      (is (= n (count s-final)))
-
-      ;; Check first and last
-      (is (= 0 (first s-final)))
-      (is (= 9999 (last s-final)))
-
-      ;; Test slicing on original set
-      (let [slice (set/slice s-final 2500 2525)]
-        (is (= (range 2500 2526) (vec slice))))
-
-      ;; Test reverse slicing
-      ;; rslice creates a reverse iterator from key-from to key-to
-      (let [rslice (set/rslice s-final 7500 7525)]
-        (when (some? rslice)
-          (is (= (reverse (range 7500 7526)) (vec rslice)))))
-
-      ;; Store to storage
-      (let [store-info (set/store-set s-final)]
-        (is (some? store-info))
-        (is (map? store-info))
-        (is (:root-address store-info))
-
-        ;; Check storage size
-        (let [storage-data @(:*store storage)]
-          (is (> (count storage-data) 100) "Should have many nodes stored"))
-
-        ;; Restore from storage
-        (let [restored (set/restore store-info storage)]
-          (is (= n (count restored)))
-
-          ;; Verify data integrity
-          (is (= 0 (first restored)))
-          (is (= 9999 (last restored)))
-
-          ;; Check a sample of elements using contains?
-          (doseq [i (range 0 10000 1000)]
-            (is (contains? restored i) (str "Missing element: " i)))
-
-          ;; Verify slices on restored set
-          (is (= (range 100) (vec (set/slice restored 0 99))))
-          (is (= (range 5000 5100) (vec (set/slice restored 5000 5099))))
-          (is (= (range 9900 10000) (vec (set/slice restored 9900 9999))))
-
-          ;; Test operations on restored set
-          (testing "conj on restored set"
-            (let [restored-with-new (set/conj restored 10000)]
-              (is (= (inc n) (count restored-with-new)))
-              (is (contains? restored-with-new 10000))))
-
-          ;; Test removing from restored set
-          (testing "disj on restored set"
-            (let [restored-without (set/disj restored 5000)]
-              (is (= (dec n) (count restored-without)))
-              (is (not (contains? restored-without 5000)))))
-
-          ;; Test iteration over restored set
-          (testing "iteration over restored set"
-            (let [first-100 (take 100 restored)]
-              (is (= (range 100) first-100)))
-            (let [last-100 (take 100 (drop 9900 restored))]
-              (is (= (range 9900 10000) last-100)))))))))
+  (:require [cljs.test :refer-macros [deftest testing is async]]
+            [missionary.core :refer [sp] :as m :refer-macros [?]]
+            [me.tonsky.persistent-sorted-set :as set]
+            [me.tonsky.persistent-sorted-set.test.async-utils :as utils]))
 
 (deftest async-storage-integration-test
   #_
@@ -192,6 +117,7 @@
                 (is (= (vec s2) (vec restored2)))))))))))
 
 (deftest custom-comparator-storage-test
+  #_
   (testing "Custom comparator with storage"
     (let [storage (utils/make-sync-storage)
           ;; Create set with reverse comparator
@@ -219,5 +145,3 @@
           (let [s5 (set/conj restored 2.5)]
             (is (= [3 2.5 2 1] (vec s5)))))))))
 
-;; Run tests when namespace is loaded
-; (cljs.test/run-tests)

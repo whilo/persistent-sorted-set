@@ -5,12 +5,9 @@
   (:refer-clojure :exclude [conj disj sorted-set sorted-set-by iter])
   (:require
    [me.tonsky.persistent-sorted-set.arrays :as arrays]
-   [await-cps :refer [await]])
+   [await-cps :refer [await] :refer-macros [async]])
   (:require-macros
-   [me.tonsky.persistent-sorted-set.arrays :as arrays]
-   [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]
-   [await-cps :refer [async]]
-   #_[me.tonsky.persistent-sorted-set.async-await :refer [async await]]))
+   [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]))
 
 ; B+ tree
 ; -------
@@ -1152,8 +1149,10 @@
 
 (defn -slice [^BTSet set key-from key-to comparator]
   (when-some [path (-seek* set key-from comparator)]
+    (println "PATH" path)
     (let [till-path (-rseek* set key-to comparator)]
       (when (path-lt path till-path)
+        (println "(path-lt path till-path)")
         (Iter. set path till-path (keys-for set path) (path-get path 0))))))
 
 

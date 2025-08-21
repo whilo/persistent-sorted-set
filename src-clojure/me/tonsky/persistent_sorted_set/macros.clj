@@ -1,4 +1,5 @@
 (ns me.tonsky.persistent-sorted-set.macros
+  (:refer-clojure :exclude [async await])
   (:require [clojure.walk]))
 
 (defmacro async+sync
@@ -26,20 +27,3 @@
     <!- do
     <?- do
     go-locked locked})
-
-(defmacro show-expansion
-  [sync? async->sync async-code]
-  (let [expanded (if sync?
-                   (clojure.walk/postwalk (fn [n]
-                                           (if-not (meta n)
-                                             (async->sync n n)
-                                             (with-meta (async->sync n n)
-                                               (update (meta n) :tag (fn [t] (async->sync t t))))))
-                                         async-code)
-                   async-code)]
-    (println "MACRO EXPANSION:")
-    (println "Original:" async-code)
-    (println "Expanded:" expanded)
-    (println "Expanded type:" (type expanded))
-    ;; Return the expansion
-    expanded))
