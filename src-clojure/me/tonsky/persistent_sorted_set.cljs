@@ -12,9 +12,9 @@
 
 ; Leaf:     keys[]     :: array of values
 
-; Node:     pointers[] :: links to children nodes
+; Node:     children[] :: links to children nodes
 ;           keys[]     :: max value for whole subtree
-;                         node.keys[i] == max(node.pointers[i].keys)
+;                         node.keys[i] == max(node.children[i].keys)
 ; All arrays are 16..32 elements, inclusive
 
 ; BTSet:    root       :: Node or Leaf
@@ -25,7 +25,7 @@
 ;           _hash      :: hash code, same as for clojure collections, on-demand, cached
 
 ; Path: conceptually a vector of indexes from root to leaf value, but encoded in a single number.
-;       E.g. we have path [7 30 11] representing root.pointers[7].pointers[30].keys[11].
+;       E.g. we have path [7 30 11] representing root.children[7].children[30].keys[11].
 ;       In our case level-shift is 5, meaning each index will take 5 bits:
 ;       (7 << 10) | (30 << 5) | (11 << 0) = 8139
 ;         00111       11110       01011
@@ -292,7 +292,7 @@
     (let [nodes (node-merge-n-split node right)]
       (return-array left (arrays/aget nodes 0) (arrays/aget nodes 1)))))
 
-(deftype Node [keys ^:mutable pointers ^:mutable addresses ^:mutable _hash]
+(deftype Node [keys ^:mutable children ^:mutable addresses ^:mutable _hash]
   Object
   (toString [_] (pr-str* (vec keys)))
 
@@ -303,12 +303,12 @@
 
   (node-merge [_ next]
     (Node. (arrays/aconcat keys (.-keys next))
-           (arrays/aconcat pointers (.-pointers next))
+           (arrays/aconcat children (.-children next))
            nil nil))
 
   (node-merge-n-split [_ next]
     (let [ks (merge-n-split keys     (.-keys next))
-          ps (merge-n-split pointers (.-pointers next))]
+          ps (merge-n-split children (.-children next))]
       (return-array
        (Node. (arrays/aget ks 0) (arrays/aget ps 0) nil nil)
        (Node. (arrays/aget ks 1) (arrays/aget ps 1) nil nil))))
@@ -330,15 +330,15 @@
           (let [child-node (await (ensure-child this idx storage opts))]
             (when-let [nodes (await (node-conj child-node cmp key storage opts))]
               (let [new-keys     (check-n-splice cmp keys     idx (inc idx) (arrays/amap node-lim-key nodes))
-                    new-pointers (splice             pointers idx (inc idx) nodes)]
-                (if (<= (arrays/alength new-pointers) max-len)
+                    new-children (splice             children idx (inc idx) nodes)]
+                (if (<= (arrays/alength new-children) max-len)
                   ;; ok as is
-                  (arrays/array (Node. new-keys new-pointers nil nil))
+                  (arrays/array (Node. new-keys new-children nil nil))
                   ;; sptta split it up
-                  (let [middle (arrays/half (arrays/alength new-pointers))]
+                  (let [middle (arrays/half (arrays/alength new-children))]
                     (arrays/array
-                     (Node. (.slice new-keys     0 middle) (.slice new-pointers 0 middle) nil nil)
-                     (Node. (.slice new-keys     middle)   (.slice new-pointers middle)   nil nil)))))))))))
+                     (Node. (.slice new-keys     0 middle) (.slice new-children 0 middle) nil nil)
+                     (Node. (.slice new-keys     middle)   (.slice new-children middle)   nil nil)))))))))))
 
   (node-disj [this cmp key root? left right storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
@@ -348,14 +348,14 @@
                     (when-not (== -1 idx) ;; short-circuit, key not here
                       (let [child       (await (ensure-child this idx storage opts))
                             left-child  (when (>= (dec idx) 0)          (await (ensure-child this (dec idx) storage opts)))
-                            right-child (when (< (inc idx) (arrays/alength pointers)) (await (ensure-child this (inc idx) storage opts)))
+                            right-child (when (< (inc idx) (arrays/alength children)) (await (ensure-child this (inc idx) storage opts)))
                             disjned     (await (node-disj child cmp key false left-child right-child storage opts))]
                         (when disjned     ;; short-circuit, key not here
                           (let [left-idx     (if left-child  (dec idx) idx)
                                 right-idx    (if right-child (+ 2 idx) (+ 1 idx))
                                 new-keys     (check-n-splice cmp keys     left-idx right-idx (arrays/amap node-lim-key disjned))
-                                new-pointers (splice             pointers left-idx right-idx disjned)]
-                            (rotate (Node. new-keys new-pointers nil nil) root? left right))))))))))
+                                new-children (splice             children left-idx right-idx disjned)]
+                            (rotate (Node. new-keys new-children nil nil) root? left right))))))))))
 
 (deftype Leaf [keys ^:mutable _hash]
   Object
@@ -519,23 +519,23 @@
   ([node idx]
    ;; Simple case - no storage, just return the child
    (when (instance? Node node)
-     (arrays/aget (.-pointers node) idx)))
+     (arrays/aget (.-children node) idx)))
   ([node idx storage opts]
    (let [{:keys [sync?] :or {sync? true}} opts]
      (async+sync sync? {async do, await do}
                  (async
                    (when (instance? Node node)
-                     ;; Initialize pointers array if needed
-                     (when (nil? (.-pointers node))
-                       (set! (.-pointers node) (arrays/make-array (arrays/alength (.-addresses node)))))
+                     ;; Initialize children array if needed
+                     (when (nil? (.-children node))
+                       (set! (.-children node) (arrays/make-array (arrays/alength (.-addresses node)))))
 
-                     (if-let [child (arrays/aget (.-pointers node) idx)]
+                     (if-let [child (arrays/aget (.-children node) idx)]
                        child
                        ;; Lazy restoration from storage
                        (when-let [addresses (.-addresses node)]
                          (when-let [addr (arrays/aget addresses idx)]
                            (let [child (await (-restore storage addr))]
-                             (arrays/aset (.-pointers node) idx child)
+                             (arrays/aset (.-children node) idx child)
                              child))))))))))
 
 
@@ -584,7 +584,7 @@
                  sub-path (await (-next-path set child-node path (dec level) opts))]
              (if (nil? sub-path)
                ;; nested node overflow
-               (if (< (inc idx) (arrays/alength (.-pointers node)))
+               (if (< (inc idx) (arrays/alength (.-children node)))
                  ;; advance current node idx, reset subsequent indexes
                  (path-set empty-path level (inc idx))
                  ;; current node overflow
@@ -605,9 +605,9 @@
    ;; For compatibility - no storage
    (if (pos? level)
      ;; inner node
-     (let [last-idx (dec (arrays/alength (.-pointers node)))]
+     (let [last-idx (dec (arrays/alength (.-children node)))]
        (recur
-         (arrays/aget (.-pointers node) last-idx)
+         (arrays/aget (.-children node) last-idx)
          (path-set path level last-idx)
          (dec level)))
      ;; leaf
@@ -1079,7 +1079,7 @@
   [node]
   (and (instance? Node node)
        (.-addresses node)           ; Has storage addresses
-       (nil? (.-pointers node))))   ; But pointers not loaded yet
+       (nil? (.-children node))))   ; But children not loaded yet
 
 (defn- slice-path-requires-storage?
   "Check if any nodes in the slice path need storage access.
@@ -1104,8 +1104,8 @@
             (let [;; Check if this child needs loading
                   child-addr (when (.-addresses node)
                                (arrays/aget (.-addresses node) idx))
-                  child-loaded? (when (.-pointers node)
-                                 (arrays/aget (.-pointers node) idx))]
+                  child-loaded? (when (.-children node)
+                                 (arrays/aget (.-children node) idx))]
               (if (and child-addr (not child-loaded?))
                 ;; Found unloaded node in slice path
                 true
@@ -1273,7 +1273,7 @@
 
       (instance? Node node)
       (async
-       (let [children (.-pointers node)
+       (let [children (.-children node)
              addresses (arrays/make-array (arrays/alength children))]
          ;; store children first
          (dotimes [i (arrays/alength children)]
@@ -1333,11 +1333,11 @@
              set
              (let [new-root (arrays/aget new-roots 0)]
                (if (and (instance? Node new-root)
-                        (== 1 (arrays/alength (.-pointers new-root))))
+                        (== 1 (arrays/alength (.-children new-root))))
 
                  ;; root has one child, make him new root
                  (alter-btset set
-                              (arrays/aget (.-pointers new-root) 0)
+                              (arrays/aget (.-children new-root) 0)
                               (dec (.-shift set))
                               (dec (.-cnt set)))
 

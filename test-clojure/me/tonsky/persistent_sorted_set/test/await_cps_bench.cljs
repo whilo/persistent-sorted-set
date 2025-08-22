@@ -292,14 +292,14 @@
        (testing "Store and restore benchmark"
          (let [sync-store-restore (run-benchmark
                                    "Sync store+restore"
-                                   #(let [store-info (set/store-set sync-set)]
+                                   #(let [store-info (set/store sync-set)]
                                       (set/restore store-info sync-storage))
                                    2 10)
 
                async-store-restore (await (run-async-benchmark
                                            "Async store+restore"
                                            #(async
-                                             (let [store-info (await (set/store-set async-set {:sync? false}))]
+                                             (let [store-info (await (set/store async-set {:sync? false}))]
                                                (await (set/restore store-info async-storage {:sync? false}))))
                                            2 10))]
            (print-comparison (format-comparison sync-store-restore async-store-restore))))))))
@@ -327,8 +327,8 @@
          async-large-set (reduce set/conj
                            (set/sorted-set* {:storage async-storage})
                            (range 1000))
-         sync-addr (set/store-set large-set)
-         async-addr (await (set/store-set async-large-set {:sync? false}))
+         sync-addr (set/store large-set)
+         async-addr (await (set/store async-large-set {:sync? false}))
          sync-lazy (set/restore sync-addr sync-storage)
          async-lazy (await (set/restore async-addr async-storage {:sync? false}))]
      (testing "Benchmark: First access (cold)"
