@@ -1,10 +1,9 @@
 (ns me.tonsky.persistent-sorted-set.test.storage
-  (:require-macros [me.tonsky.persistent-sorted-set.test.storage
-                    :refer [with-stats dobatches]])
+  (:require-macros [me.tonsky.persistent-sorted-set.test.storage :refer [with-stats dobatches]])
   (:require
+   [cljs.test :as t :refer [is are deftest testing]]
    [clojure.edn :as edn]
    [clojure.string :as str]
-   [cljs.test :as t :refer [is are deftest testing]]
    [me.tonsky.persistent-sorted-set :as set :refer [Leaf Node]]))
 
 (def ^:dynamic *debug* false)
@@ -65,8 +64,7 @@
      (let [node (or node (memory address))]
        (if (instance? Leaf node)
          1.0
-         (let [node ^Branch node
-               len (count (.-keys  node))]
+         (let [len (count (.-keys node))]
            (double
              (/ (->>
                   (mapv
@@ -80,20 +78,20 @@
 
 (defn durable-ratio
   ([set]
-   (double (durable-ratio (.-address set) (.-root set))))
+   (durable-ratio (.-address set) (.-root set)))
   ([address node]
    (cond
      (some? address)       1.0
      (instance? Leaf node) 0.0
      :else
-     (let [len (.len node)]
+     (let [len (count (.-keys node))]
        (/ (->>
             (map
               (fn [_ child-addr child]
                 (durable-ratio child-addr child))
               (range len)
-              (.-addresses ^Branch node)
-              (.-children ^Branch node))
+              (.-addresses node)
+              (.-children node))
             (reduce + 0))
          len)))))
 
@@ -101,12 +99,14 @@
   "Check that invalidating middle branch does not invalidates siblings"
   (let [size 7000 ;; 3-4 branches
         xs   (shuffle (range size))
-        set  (into (set/sorted-set* {:branching-factor 64}) xs)]
-    (set/store set (storage))
-    ; (is (= 1.0 (durable-ratio set))
-    ;   (let [set' (disj set 3500)] ;; one of the middle branches
-    ;     (is (< 0.98 (durable-ratio set')))))
-    ))
+        set  (into (set/sorted-set* {}) xs)]
+    (set/store set (storage) {:sync? true})
+    (and
+     (is (= 1.0 (durable-ratio set)))
+     (let [set' (disj set 3500)] ;; one of the middle branches
+       (is (< 0.98 (durable-ratio set'))))
+     (let [set' (disj set (quot size 2))] ;; middle-ish key
+       (is (< 0.98 (durable-ratio set')))))))
 
 ; (deftest stresstest-stable-addresses
 ;   (let [size      10000
@@ -116,15 +116,15 @@
 ;         *disk     (atom {})
 ;         storage   (storage *disk)
 ;         invariant (fn invariant
-;                     ([^PersistentSortedSet o]
-;                      (invariant (.root o) (some? (.-_address o))))
-;                     ([^ANode o stored?]
+;                     ([o]
+;                      (invariant (.-root o) (some? (.-address o))))
+;                     ([o stored?]
 ;                      (condp instance? o
-;                        Branch
-;                        (let [node ^Branch o
-;                              len (.len node)]
+;                        Node
+;                        (let [node ^Node o
+;                              len (count (.-keys node))]
 ;                          (doseq [i (range len)
-;                                  :let [addr   (nth (.-_addresses node) i)
+;                                  :let [addr   (nth (.-addresses node) i)
 ;                                        child  (.child node storage (int i))
 ;                                        {:keys [keys addresses]} (edn/read-string (@*disk addr))]]
 ;                            ;; nodes inside stored? has to ALL be stored
@@ -144,9 +144,7 @@
 ;         (let [set' (swap! *set into xs)]
 ;           (invariant set')
 ;           (set/store set' storage)))
-;
 ;       (invariant @*set)
-;
 ;       (dobatches [xs removes]
 ;         (let [set' (swap! *set #(reduce disj % xs))]
 ;           (invariant set')
@@ -158,11 +156,12 @@
 ;       (dobatches [xs removes]
 ;         (let [set' (swap! *set #(reduce disj % xs))]
 ;           (invariant set'))))))
-;
+
+
 ; (deftest test-walk
 ;   (let [size    1000000
 ;         xs      (shuffle (range size))
-;         set     (into (set/sorted-set* {:branching-factor 64}) xs)
+;         set     (into (set/sorted-set* {}) xs)
 ;         *stored (atom 0)]
 ;     (set/walk-addresses set
 ;       (fn [addr]
@@ -179,7 +178,7 @@
 ;           (if (some? addr)
 ;             (swap! *stored' inc))))
 ;       (is (= (- @*stored 4) @*stored')))))
-;
+
 ; (deftest test-lazyness
 ;   (let [size       1000000
 ;         xs         (shuffle (range size))

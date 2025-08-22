@@ -18,12 +18,4 @@
                                    (with-meta (async->sync n n)
                                      (update (meta n) :tag (fn [t] (async->sync t t))))))
                                async-code)
-       ~async-code)))
-
-(def ^:dynamic *default-sync-translation*
-  '{go-try try
-    <? do
-    go-try- try
-    <!- do
-    <?- do
-    go-locked locked})
+                     ~async-code)))

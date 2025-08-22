@@ -24,7 +24,7 @@
              (is (some? rslice))
              (is (= (reverse (range 7500 7526)) (vec rslice))))))
        (testing-group "Store to storage"
-         (let [store-info (set/store s-final)]
+         (let [store-info (set/store s-final {:sync? true})]
            (and
             (is (some? store-info))
             (is (map? store-info))
@@ -33,8 +33,8 @@
              (testing  "Check storage size"
                (let [storage-data @(:*store storage)]
                  (is (> 100 (count storage-data)) "Should have many nodes stored")))
-             #_(testing "Restore from storage"
-               (let [restored (set/restore store-info storage)]
+             (testing "Restore from storage"
+               (let [restored (set/restore store-info storage {:sync? true})]
                  (and
                   (is (= n (count restored)))
                   (is (= 0 (first restored)))

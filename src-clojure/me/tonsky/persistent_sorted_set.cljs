@@ -252,8 +252,6 @@
          (arrays/array a2))
        (arrays/array a3)))))
 
-;;
-
 (defprotocol INode
   (node-lim-key       [_])
   (node-len           [_])
@@ -299,11 +297,9 @@
   (toString [_] (pr-str* (vec keys)))
 
   INode
-  (node-lim-key [_]
-    (arrays/alast keys))
+  (node-lim-key [_] (arrays/alast keys))
 
-  (node-len [_]
-    (arrays/alength keys))
+  (node-len [_] (arrays/alength keys))
 
   (node-merge [_ next]
     (Node. (arrays/aconcat keys (.-keys next))
@@ -321,28 +317,28 @@
     (let [{:keys [sync?] :or {sync? true}} opts
           idx (lookup-range cmp keys key)]
       (async+sync sync? {async do, await do}
-                  (async
-                    (when-not (== -1 idx)
-                      (let [child-node (await (ensure-child this idx storage opts))]
-                        (await (node-lookup child-node cmp key storage opts))))))))
+        (async
+          (when-not (== -1 idx)
+            (let [child-node (await (ensure-child this idx storage opts))]
+              (await (node-lookup child-node cmp key storage opts))))))))
 
   (node-conj [this cmp key storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
           idx   (binary-search-l cmp keys (- (arrays/alength keys) 2) key)]
       (async+sync sync? {async do, await do}
-                  (async
-                    (let [child-node (await (ensure-child this idx storage opts))]
-                      (when-let [nodes (await (node-conj child-node cmp key storage opts))]
-                        (let [new-keys     (check-n-splice cmp keys     idx (inc idx) (arrays/amap node-lim-key nodes))
-                              new-pointers (splice             pointers idx (inc idx) nodes)]
-                          (if (<= (arrays/alength new-pointers) max-len)
-                            ;; ok as is
-                            (arrays/array (Node. new-keys new-pointers nil nil))
-                            ;; sptta split it up
-                            (let [middle (arrays/half (arrays/alength new-pointers))]
-                              (arrays/array
-                               (Node. (.slice new-keys     0 middle) (.slice new-pointers 0 middle) nil nil)
-                               (Node. (.slice new-keys     middle)   (.slice new-pointers middle)   nil nil)))))))))))
+        (async
+          (let [child-node (await (ensure-child this idx storage opts))]
+            (when-let [nodes (await (node-conj child-node cmp key storage opts))]
+              (let [new-keys     (check-n-splice cmp keys     idx (inc idx) (arrays/amap node-lim-key nodes))
+                    new-pointers (splice             pointers idx (inc idx) nodes)]
+                (if (<= (arrays/alength new-pointers) max-len)
+                  ;; ok as is
+                  (arrays/array (Node. new-keys new-pointers nil nil))
+                  ;; sptta split it up
+                  (let [middle (arrays/half (arrays/alength new-pointers))]
+                    (arrays/array
+                     (Node. (.slice new-keys     0 middle) (.slice new-pointers 0 middle) nil nil)
+                     (Node. (.slice new-keys     middle)   (.slice new-pointers middle)   nil nil)))))))))))
 
   (node-disj [this cmp key root? left right storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts
@@ -1255,11 +1251,8 @@
               (recur acc (inc i) e)
               (recur (conj! acc e) (inc i) e))))))))
 
-;; Storage operations
-
 (declare store-node)
 
-;; Helper functions for creating nodes from storage
 (defn make-node-from-storage
   "Create a Node with addresses for lazy restoration"
   [keys addresses]
@@ -1272,30 +1265,28 @@
 
 (defn store-node
   "Store a node recursively. Returns address or channel depending on sync mode."
-  [node storage opts]
-  (let [{:keys [sync?] :or {sync? true}} opts]
+  [node storage  {:keys [sync?] :or {sync? true} :as opts}]
   (async+sync sync? {async do, await do}
-              (cond
-                ;; Leaf node - just store it
-                (instance? Leaf node)
-                (-store storage node opts)
+    (cond
+      (instance? Leaf node)
+      (-store storage node opts)
 
-                ;; Branch node - store children first
-                (instance? Node node)
-                (async
-                  (let [children (.-pointers node)
-                        addresses (arrays/make-array (arrays/alength children))]
-                    (dotimes [i (arrays/alength children)]
-                      (let [child (arrays/aget children i)
-                            addr (await (store-node child storage opts))]
-                        (arrays/aset addresses i addr)))
-                    ;; Then store this node with addresses
-                    (let [node-with-addresses (Node. (.-keys node) nil addresses nil)
-                          final-addr (await (-store storage node-with-addresses nil))]
-                      final-addr)))
+      (instance? Node node)
+      (async
+       (let [children (.-pointers node)
+             addresses (arrays/make-array (arrays/alength children))]
+         ;; store children first
+         (dotimes [i (arrays/alength children)]
+           (let [child (arrays/aget children i)
+                 addr (await (store-node child storage opts))]
+             (arrays/aset addresses i addr)))
+         ;; Then store this node with addresses
+         (let [node-with-addresses (Node. (.-keys node) nil addresses nil)
+               final-addr (await (-store storage node-with-addresses nil))]
+           final-addr)))
 
-                :else
-                (throw (ex-info "Unknown node type" {:node node :type (type node)}))))))
+      :else
+      (throw (ex-info "Unknown node type" {:node node :type (type node)})))))
 
 ;; Public interface
 
@@ -1319,16 +1310,14 @@
                        (alter-btset set
                                     (arrays/aget roots 0)
                                     (.-shift set)
-                                    (inc (.-cnt set))
-                                    )
+                                    (inc (.-cnt set)))
 
                        ;; introducing new root
                        :else
                        (alter-btset set
                                     (Node. (arrays/amap node-lim-key roots) roots nil nil)
                                     (inc (.-shift set))
-                                    (inc (.-cnt set))
-                                    ))))))))
+                                    (inc (.-cnt set))))))))))
 
 (defn disj
   "Analogue to [[clojure.core/disj]] with comparator that overrides the one stored in set.
@@ -1350,15 +1339,13 @@
                  (alter-btset set
                               (arrays/aget (.-pointers new-root) 0)
                               (dec (.-shift set))
-                              (dec (.-cnt set))
-                              )
+                              (dec (.-cnt set)))
 
                  ;; keeping root level
                  (alter-btset set
                               new-root
                               (.-shift set)
-                              (dec (.-cnt set))
-                              ))))))))))
+                              (dec (.-cnt set))))))))))))
 
 (defn slice
   "An iterator for part of the set with provided boundaries.
@@ -1376,9 +1363,6 @@
    (-async-slice set key-from key-to (.-comparator set)))
   ([^BTSet set key-from key-to comparator]
    (-async-slice set key-from key-to comparator)))
-
-;; TODO: Implement async-rslice similar to async-slice
-;; Would return a Promise resolving to a reverse-ordered vector of elements
 
 (defn rslice
   "A reverse iterator for part of the set with provided boundaries.
@@ -1465,11 +1449,13 @@
 (defn store
   "Store the set to storage. Returns map with :root-address, :shift, :count.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
+  ([^BTSet set]
+   (store set (.-storage set) {}))
   ([^BTSet set opts]
    (store set (.-storage set) opts))
   ([^BTSet set storage {:keys [sync?] :or {sync? true} :as opts}]
    (assert (instance? BTSet set))
-   (assert (implements? me.tonsky.persistent-sorted-set/IStorage storage))
+   (assert (implements? IStorage storage))
    (async+sync sync? {async do, await do}
      (async
        (let [root-addr (await (store-node (.-root set) storage opts))]
@@ -1484,7 +1470,8 @@
    - A root address (UUID) - requires opts with :shift and :count
    - A map from store-set with :root-address, :shift, :count, :comparator
    Storage operations will use the provided opts for sync/async mode."
-  ([root-address-or-info storage] (restore root-address-or-info storage {}))
+  ([root-address-or-info storage]
+   (restore root-address-or-info storage {}))
   ([root-address-or-info storage opts]
    (let [{:keys [sync?] :or {sync? true}} opts
          ;; Handle both old format (bare UUID) and new format (map with metadata)
