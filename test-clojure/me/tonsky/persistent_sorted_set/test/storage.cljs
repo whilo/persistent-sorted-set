@@ -23,9 +23,8 @@
     (let [address (gen-addr)]
       (swap! *disk assoc address
              (pr-str
-              {:level     (.level node)
-               :keys      (.keys node)
-               :addresses (when (instance? Node node) (.addresses node))}))
+              {:keys      (.-keys node)
+               :addresses (when (instance? Node node) (.-addresses node))}))
       address))
   (-restore [_ address opts]
     (or
@@ -52,25 +51,87 @@
         address (set/store set storage)]
     (set/restore address storage)))
 
+(defn children [node] (.-children node))
+
 (deftest basics
   (and
-   (testing "one leaf."
+   (testing "one item"
      (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
-           original (conj (set/sorted-set* {:branching-factor 32}) 0)
-           storage  (storage)]
+           original (conj (set/sorted-set* {}) 0)]
        (and
         (is (= 0 (:writes @*stats)))
         (is (= 0 (:reads @*stats)))
-        (let [address (set/store original storage)]
+        (is (instance? Leaf (.-root original)))
+        (is (nil? (.-address original)))
+        (let [storage (storage)
+              address (set/store original storage)]
           (and
            (is (uuid? address))
+           (is (= address (.-address original)))
            (is (= 1 (:writes @*stats)))
            (is (= 0 (:reads @*stats)))
-           (let [restored (set/restore address storage {:branching-factor 32})]
+           (let [restored (set/restore address storage {:count 1})]             ;<-- XXX
              (and
-              (is (= 0 (:reads @*stats)))
+              (is (set? original))
+              (is (set? restored))
+              (is (= 1 (count original)))
+              (is (= 1 (count restored)))
               (is (= restored original))
-              )))))))))
+              (is (instance? Leaf (.-root restored)))
+              (is (= 1 (:reads @*stats))))))))))
+   (testing "one full leaf"
+     (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
+           original (into (set/sorted-set* {}) (range 0 32))]
+       (and
+        (is (= 0 (:writes @*stats)))
+        (is (= 0 (:reads @*stats)))
+        (is (instance? Leaf (.-root original)))
+        (is (nil? (.-address original)))
+        (let [storage  (storage)
+              address (set/store original storage)]
+          (and
+           (is (uuid? address))
+           (is (= address (.-address original)))
+           (is (= 1 (:writes @*stats)))
+           (is (= 0 (:reads @*stats)))
+           (let [restored (set/restore address storage {:count 32})]            ;<-- XXX
+             (and
+              (is (= restored original))
+              (is (instance? Leaf (.-root restored)))
+              (is (= 1 (:reads @*stats))))))))))
+   (testing "full-leaf + 1"
+     (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
+           original (into (set/sorted-set* {}) (range 0 33))]
+       (and
+        (is (= 0 (:writes @*stats)))
+        (is (= 0 (:reads @*stats)))
+        (is (instance? Node (.-root original)))
+        (let [children (children (.-root original))]
+          (and
+           (is (= 2 (count children)))
+           (is (instance? Leaf (nth children 0)))
+           (is (= 16 (count (.-keys (nth children 0)))))
+           (is (instance? Leaf (nth children 1)))
+           (is (= 17 (count (.-keys (nth children 1)))))))
+        (is (nil? (.-address original)))
+        (let [storage (storage)
+              address (set/store original storage)]
+          (and
+           (is (uuid? address))
+           (is (= address (.-address original)))
+           (is (= 3 (:writes @*stats)))
+           (is (= 0 (:reads @*stats)))
+           (let [restored (set/restore address storage {:count 33})]            ;<--- XXX
+             (and
+              (is (= restored original))
+              (let [children (children (.-root restored))]
+                (and
+                 (is (= 2 (count children)))
+                 (is (instance? Leaf (nth children 0)))
+                 (is (= 16 (count (.-keys (nth children 0)))))
+                 (is (instance? Leaf (nth children 1)))
+                 (is (= 17 (count (.-keys (nth children 1)))))))
+              (is (= 3 (:reads @*stats))))))))))))
 
 ; (defn loaded-ratio
 ;   ([set]
