@@ -66,9 +66,9 @@
 (def ^:const empty-path 0)
 
 (defprotocol IStorage
-  (-restore [this address])
+  (-store [this node opts])
+  (-restore [this address opts])
   (-accessed [this address])
-  (-store [this node address])
   (-delete [this addresses]))
 
 (defn- path-get ^number [^number path ^number level]
@@ -534,7 +534,7 @@
                        ;; Lazy restoration from storage
                        (when-let [addresses (.-addresses node)]
                          (when-let [addr (arrays/aget addresses idx)]
-                           (let [child (await (-restore storage addr))]
+                           (let [child (await (-restore storage addr opts))]
                              (arrays/aset (.-children node) idx child)
                              child))))))))))
 
@@ -1269,7 +1269,7 @@
   (async+sync sync? {async do, await do}
     (cond
       (instance? Leaf node)
-      (-store storage node opts)
+      (await (-store storage node opts))
 
       (instance? Node node)
       (async
@@ -1282,7 +1282,7 @@
              (arrays/aset addresses i addr)))
          ;; Then store this node with addresses
          (let [node-with-addresses (Node. (.-keys node) nil addresses nil)
-               final-addr (await (-store storage node-with-addresses nil))]
+               final-addr (await (-store storage node-with-addresses opts))]
            final-addr)))
 
       :else
@@ -1447,24 +1447,25 @@
           (:meta opts) uninitialized-hash (:storage opts)))
 
 (defn store
-  "Store the set to storage. Returns map with :root-address, :shift, :count.
-   Accepts optional opts map with {:sync? true/false} (defaults to true)."
+  "Accepts optional opts map with {:sync? true/false} (defaults to true).
+   returns address specified by storage"
   ([^BTSet set]
    (store set (.-storage set) {}))
   ([^BTSet set arg]
    (if (implements? IStorage arg)
-     (store set arg {})
+     (do
+       (set! (.-storage set) arg)
+       (store set arg {}))
      (store set (.-storage set) arg)))
   ([^BTSet set storage {:keys [sync?] :or {sync? true} :as opts}]
    (assert (instance? BTSet set))
    (assert (implements? IStorage storage))
    (async+sync sync? {async do, await do}
      (async
-       (let [root-addr (await (store-node (.-root set) storage opts))]
-         {:root-address root-addr
-          :shift (.-shift set)
-          :count (.-cnt set)
-          :comparator (.-comparator set)})))))
+      (do
+        (when (nil? (.-address set))
+          (set! (.-address set) (await (store-node (.-root set) storage opts))))
+        (.-address set))))))
 
 (defn restore
   "Restore a set from storage given root-address-or-info and storage.
@@ -1492,5 +1493,5 @@
                (or (:comparator opts) compare))]
      (async+sync sync? {async do, await do}
                  (async
-                   (let [root (await (-restore storage root-address))]
+                   (let [root (await (-restore storage root-address opts))]
                      (BTSet. root shift cnt cmp nil uninitialized-hash storage)))))))

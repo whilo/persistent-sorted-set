@@ -209,6 +209,26 @@
             (swap! *stored' inc))))
       (is (= (- @*stored 5) @*stored')))))
 
+(deftest basics
+  (and
+   (testing "one leaf."
+     (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
+           original (conj (set/sorted-set* {:branching-factor 32}) 0)
+           storage  (storage)]
+       (and
+        (is (= 0 (:writes @*stats)))
+        (is (= 0 (:reads @*stats)))
+        (let [address (set/store original storage)]
+          (and
+           (is (uuid? address))
+           (is (= 1 (:writes @*stats)))
+           (is (= 0 (:reads @*stats)))
+           (let [restored (set/restore address storage {:branching-factor 32})]
+             (and
+              (is (= 0 (:reads @*stats)))
+              (is (= restored original))
+              )))))))))
+
 (deftest test-lazyness
   (let [size       100000
         xs         (shuffle (range size))
@@ -216,10 +236,10 @@
         original   (-> (reduce disj (into (set/sorted-set* {:branching-factor 32}) xs) rm)
                      (disj (quot size 4) (quot size 2)))
         storage    (storage)
-        address    (with-stats
-                     (set/store original storage))
+        _          (is (= 0 (:writes @*stats)))
+        address    (with-stats (set/store original storage))
+        _          (is (< 4000 (:writes @*stats) 4096))
         _          (is (= 0 (:reads @*stats)))
-        ; _          (is (> (:writes @*stats) (/ size PersistentSortedSet/MAX_LEN)))
         loaded     (set/restore address storage {:branching-factor 32})
         _          (is (= 0 (:reads @*stats)))
         _          (is (= 0.0 (loaded-ratio loaded)))
