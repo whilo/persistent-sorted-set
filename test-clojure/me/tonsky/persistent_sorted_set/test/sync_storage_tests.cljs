@@ -24,7 +24,7 @@
              (is (some? rslice))
              (is (= (reverse (range 7500 7526)) (vec rslice))))))
        (testing-group "Store to storage"
-         (let [store-info (set/store-set s-final)]
+         (let [store-info (set/store s-final)]
            (and
             (is (some? store-info))
             (is (map? store-info))

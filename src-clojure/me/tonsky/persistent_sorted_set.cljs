@@ -67,17 +67,11 @@
 
 (def ^:const empty-path 0)
 
-;; Storage protocol
 (defprotocol IStorage
   (-restore [this address])
   (-accessed [this address])
   (-store [this node address])
   (-delete [this addresses]))
-
-;; Async/sync translation map for superv.async
-(def storage-translation
-  '{async do
-    await do})
 
 (defn- path-get ^number [^number path ^number level]
   (if (< level max-safe-level)
@@ -1470,11 +1464,12 @@
   (BTSet. (Leaf. (arrays/array) nil) 0 0 (or (:comparator opts) compare)
           (:meta opts) uninitialized-hash (:storage opts)))
 
-(defn store-set
+(defn store
   "Store the set to storage. Returns map with :root-address, :shift, :count.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
-  ([set] (store-set set {}))
+  ([set] (store set {}))
   ([^BTSet set opts]
+   (assert (instance? BTSet set))
    (let [{:keys [sync?] :or {sync? true}} opts
          storage (.-storage set)]
      (async+sync sync? {async do, await do}
