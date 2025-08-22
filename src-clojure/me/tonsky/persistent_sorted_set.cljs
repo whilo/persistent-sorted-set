@@ -1269,7 +1269,7 @@
   (async+sync sync? {async do, await do}
     (cond
       (instance? Leaf node)
-      (await (-store storage node opts))
+      (-store storage node opts)
 
       (instance? Node node)
       (async

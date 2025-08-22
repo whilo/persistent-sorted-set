@@ -6,14 +6,14 @@
 
 (defrecord TestSyncStorage [*store]
   me.tonsky.persistent-sorted-set/IStorage
-  (-restore [this address]
+  (-restore [this address opts]
     (if-let [{:keys [type keys addresses]} (get @*store address)]
       (case type
         :node (set/make-node-from-storage keys (vec addresses))
         :leaf (set/make-leaf-from-storage keys))
       (throw (ex-info "Node not found" {:address address}))))
-  (-store [_ node existing-address]
-    (let [addr (or existing-address (random-uuid))
+  (-store [_ node opts]
+    (let [addr (random-uuid)
           data (cond
                  (= (type node) set/Node)
                  {:type :node
@@ -31,7 +31,7 @@
 
 (defrecord TestAsyncStorage [*store delay-ms]
   me.tonsky.persistent-sorted-set/IStorage
-  (-restore [this address]
+  (-restore [this address opts]
     ;; Always use callback style, even with zero delay
     (fn [resolve raise]
       (if (zero? delay-ms)
@@ -62,12 +62,12 @@
                   (raise e))))))
          delay-ms))))
 
-  (-store [_ node existing-address]
+  (-store [_ node opts]
     (fn [resolve raise]
       (if (zero? delay-ms)
         ;; Fast path: no delay = immediate callback
         (try
-          (let [addr (or existing-address (random-uuid))
+          (let [addr (random-uuid)
                 data (cond
                        (= (type node) set/Node)
                        {:type :node
@@ -89,7 +89,7 @@
            (smart-trampoline
             (fn []
               (try
-                (let [addr (or existing-address (random-uuid))
+                (let [addr (random-uuid)
                       data (cond
                              (= (type node) set/Node)
                              {:type :node
