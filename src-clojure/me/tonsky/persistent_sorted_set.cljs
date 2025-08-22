@@ -644,8 +644,6 @@
            ;; leaf
            (path-set path 0 (dec (arrays/alength (.-keys node))))))))))
 
-
-
 (defn- next-path-async
   "Async version of next-path that returns channel with next path"
   [set ^number path]
@@ -717,7 +715,6 @@
                              (await (-rpath child-node path (dec level) (.-storage set) opts))
                              (-rpath child-node path (dec level)))]
                  (path-set path' level (dec idx)))))))))))
-
 
 (defn- prev-path-async
   "Async version of prev-path that returns channel with previous path"
@@ -1149,12 +1146,9 @@
 
 (defn -slice [^BTSet set key-from key-to comparator]
   (when-some [path (-seek* set key-from comparator)]
-    (println "PATH" path)
     (let [till-path (-rseek* set key-to comparator)]
       (when (path-lt path till-path)
-        (println "(path-lt path till-path)")
         (Iter. set path till-path (keys-for set path) (path-get path 0))))))
-
 
 (defprotocol IAsyncSeq
   (-afirst [this] "Returns async expression yielding first element")
@@ -1186,12 +1180,9 @@
             (when (and next-path (path-lt next-path till-path))
               ;; Don't pass keys - will be loaded lazily for new leaf
               (AsyncSeq. set next-path till-path nil nil)))))))
-
-
   Object
   (toString [this]
     (str "AsyncSeq[" (path-str path) " -> " (path-str till-path) "]"))
-
   IPrintWithWriter
   (-pr-writer [this writer opts]
     (-write writer (str this))))
@@ -1337,7 +1328,7 @@
                                     (arrays/aget roots 0)
                                     (.-shift set)
                                     (inc (.-cnt set))
-                                    cmp)
+                                    )
 
                        ;; introducing new root
                        :else
@@ -1345,7 +1336,7 @@
                                     (Node. (arrays/amap node-lim-key roots) roots nil nil)
                                     (inc (.-shift set))
                                     (inc (.-cnt set))
-                                    cmp))))))))
+                                    ))))))))
 
 (defn disj
   "Analogue to [[clojure.core/disj]] with comparator that overrides the one stored in set.
@@ -1368,14 +1359,14 @@
                               (arrays/aget (.-pointers new-root) 0)
                               (dec (.-shift set))
                               (dec (.-cnt set))
-                              cmp)
+                              )
 
                  ;; keeping root level
                  (alter-btset set
                               new-root
                               (.-shift set)
                               (dec (.-cnt set))
-                              cmp))))))))))
+                              ))))))))))
 
 (defn slice
   "An iterator for part of the set with provided boundaries.
