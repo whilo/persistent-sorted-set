@@ -1451,8 +1451,10 @@
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
   ([^BTSet set]
    (store set (.-storage set) {}))
-  ([^BTSet set opts]
-   (store set (.-storage set) opts))
+  ([^BTSet set arg]
+   (if (implements? IStorage arg)
+     (store set arg {})
+     (store set (.-storage set) arg)))
   ([^BTSet set storage {:keys [sync?] :or {sync? true} :as opts}]
    (assert (instance? BTSet set))
    (assert (implements? IStorage storage))
