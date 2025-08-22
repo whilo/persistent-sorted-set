@@ -15,6 +15,10 @@
 (def ^:dynamic *debug*
   false)
 
+(defn dbg [& args]
+  (when *debug*
+    (apply println args)))
+
 (defn gen-addr []
   (random-uuid)
   #_(str (str/join (repeatedly 10 #(rand-nth "ABCDEFGHIJKLMNOPQRSTUVWXYZ")))))
@@ -33,6 +37,7 @@
 (defrecord Storage [*memory *disk ^Settings settings]
   IStorage
   (store [_ node]
+    (dbg "store<" (type node) ">")
     (swap! *stats update :writes inc)
     (let [node    ^ANode node
           address (gen-addr)]
@@ -55,6 +60,7 @@
             node (if addresses
                    (Branch. (int level) ^java.util.List keys ^java.util.List addresses settings)
                    (Leaf. keys settings))]
+        (dbg "restored<" (type node) ">")
         (swap! *stats update :reads inc)
         (swap! *memory assoc address node)
         node))))
@@ -209,25 +215,88 @@
             (swap! *stored' inc))))
       (is (= (- @*stored 5) @*stored')))))
 
+(defn unwrap [^Object node]
+  (if (instance? Reference node) (.get ^Reference node) node))
+
+(defn children [node]
+  (some->> (.-_children (unwrap node)) (mapv unwrap)))
+
 (deftest basics
   (and
-   (testing "one leaf."
+   (testing "one item"
      (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
-           original (conj (set/sorted-set* {:branching-factor 32}) 0)
+           original ^PersistentSortedSet (conj (set/sorted-set* {:branching-factor 32}) 0)
            storage  (storage)]
        (and
         (is (= 0 (:writes @*stats)))
         (is (= 0 (:reads @*stats)))
+        (is (instance? Leaf (unwrap (.-_root original))))
+        (is (nil? (.-_address original)))
         (let [address (set/store original storage)]
           (and
            (is (uuid? address))
+           (is (= address (.-_address ^PersistentSortedSet original)))
            (is (= 1 (:writes @*stats)))
            (is (= 0 (:reads @*stats)))
-           (let [restored (set/restore address storage {:branching-factor 32})]
+           (let [restored ^PersistentSortedSet (set/restore address storage {:branching-factor 32})]
              (and
-              (is (= 0 (:reads @*stats)))
               (is (= restored original))
-              )))))))))
+              (is (instance? Leaf (unwrap (.-_root restored))))
+              (is (= 1 (:reads @*stats))))))))))
+   (testing "one full leaf"
+     (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
+           original ^PersistentSortedSet (into (set/sorted-set* {:branching-factor 32}) (range 0 32))
+           storage  (storage)]
+       (and
+        (is (= 0 (:writes @*stats)))
+        (is (= 0 (:reads @*stats)))
+        (is (instance? Leaf (unwrap (.-_root original))))
+        (is (nil? (.-_address original)))
+        (let [address (set/store original storage)]
+          (and
+           (is (uuid? address))
+           (is (= address (.-_address ^PersistentSortedSet original)))
+           (is (= 1 (:writes @*stats)))
+           (is (= 0 (:reads @*stats)))
+           (let [restored ^PersistentSortedSet (set/restore address storage {:branching-factor 32})]
+             (and
+              (is (= restored original))
+              (is (instance? Leaf (unwrap (.-_root restored))))
+              (is (= 1 (:reads @*stats))))))))))
+   (testing "full-leaf + 1"
+     (binding [*debug* true]
+       (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
+             original ^PersistentSortedSet (into (set/sorted-set* {:branching-factor 32}) (range 0 33))
+             storage  (storage)]
+         (and
+          (is (= 0 (:writes @*stats)))
+          (is (= 0 (:reads @*stats)))
+          (is (instance? Branch (unwrap (.-_root original))))
+          (let [children (children (.-_root original))]
+            (and
+             (is (= 2 (count children)))
+             (is (instance? Leaf (nth children 0)))
+             (is (= 16 (.-_len ^Leaf (nth children 0))))
+             (is (instance? Leaf (nth children 1)))
+             (is (= 17 (.-_len ^Leaf (nth children 1))))))
+          (is (nil? (.-_address original)))
+          (let [address (set/store original storage)]
+            (and
+             (is (uuid? address))
+             (is (= address (.-_address ^PersistentSortedSet original)))
+             (is (= 3 (:writes @*stats)))
+             (is (= 0 (:reads @*stats)))
+             (let [restored ^PersistentSortedSet (set/restore address storage {:branching-factor 32})]
+               (and
+                (is (= restored original))
+                (let [children (children (.-_root restored))]
+                  (and
+                   (is (= 2 (count children)))
+                   (is (instance? Leaf (nth children 0)))
+                   (is (= 16 (.-_len ^Leaf (nth children 0))))
+                   (is (instance? Leaf (nth children 1)))
+                   (is (= 17 (.-_len ^Leaf (nth children 1))))))
+                (is (= 3 (:reads @*stats)))))))))))))
 
 (deftest test-lazyness
   (let [size       100000
