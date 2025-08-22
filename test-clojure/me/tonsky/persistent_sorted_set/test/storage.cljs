@@ -1,5 +1,6 @@
 (ns me.tonsky.persistent-sorted-set.test.storage
-  (:require-macros [me.tonsky.persistent-sorted-set.test.storage :refer [with-stats]])
+  (:require-macros [me.tonsky.persistent-sorted-set.test.storage
+                    :refer [with-stats dobatches]])
   (:require
    [clojure.edn :as edn]
    [clojure.string :as str]
@@ -50,71 +51,63 @@
         address (set/store set storage)]
     (set/restore address storage)))
 
-; (defn loaded-ratio
-;   ([^PersistentSortedSet set]
-;    (let [storage (.-_storage set)
-;          address (.-_address set)
-;          root    (.-_root set)]
-;      (loaded-ratio (some-> storage :*memory deref) address root)))
-;   ([memory address node]
-;    (when *debug*
-;      (println address (contains? memory address) node (memory address)))
-;    (if (and address (not (contains? memory address)))
-;      0.0
-;      (let [node (if (instance? Reference node) (.get ^Reference node) node)
-;            node (or node (memory address))]
-;        (if (instance? Leaf node)
-;          1.0
-;          (let [node ^Branch node
-;                len (.len node)]
-;            (double
-;              (/ (->>
-;                   (mapv
-;                     (fn [_ child-addr child]
-;                       (loaded-ratio memory child-addr child))
-;                     (range len)
-;                     (or (.-_addresses node) (repeat len nil))
-;                     (or (.-_children node) (repeat len nil)))
-;                   (reduce + 0))
-;                len))))))))
-;
-; (defn durable-ratio
-;   ([^PersistentSortedSet set]
-;    (double (durable-ratio (.-_address set) (.-_root set))))
-;   ([address ^ANode node]
-;    (cond
-;      (some? address)       1.0
-;      (instance? Leaf node) 0.0
-;      :else
-;      (let [len (.len node)]
-;        (/ (->>
-;             (map
-;               (fn [_ child-addr child]
-;                 (durable-ratio child-addr child))
-;               (range len)
-;               (.-_addresses ^Branch node)
-;               (.-_children ^Branch node))
-;             (reduce + 0))
-;          len)))))
-;
-; (deftest test-lazy-remove
-;   "Check that invalidating middle branch does not invalidates siblings"
-;   (let [size 7000 ;; 3-4 branches
-;         xs   (shuffle (range size))
-;         set  (into (set/sorted-set* {:branching-factor 64}) xs)]
-;     (set/store set (storage))
-;     (is (= 1.0 (durable-ratio set))
-;       (let [set' (disj set 3500)] ;; one of the middle branches
-;         (is (< 0.98 (durable-ratio set')))))))
-;
-; ; (defmacro dobatches [[sym coll] & body]
-; ;   `(loop [coll# ~coll]
-; ;      (when (seq coll#)
-; ;        (let [batch# (rand-nth [1 2 3 4 5 10 20 30 40 50 100])
-; ;              [~sym tail#] (split-at batch# coll#)]
-; ;          ~@body
-; ;          (recur tail#)))))
-;
+(defn loaded-ratio
+  ([set]
+   (let [storage (.-storage set)
+         address (.-address set)
+         root    (.-root set)]
+     (loaded-ratio (some-> storage :*memory deref) address root)))
+  ([memory address node]
+   (when *debug*
+     (println address (contains? memory address) node (memory address)))
+   (if (and address (not (contains? memory address)))
+     0.0
+     (let [node (or node (memory address))]
+       (if (instance? Leaf node)
+         1.0
+         (let [node ^Branch node
+               len (count (.-keys  node))]
+           (double
+             (/ (->>
+                  (mapv
+                    (fn [_ child-addr child]
+                      (loaded-ratio memory child-addr child))
+                    (range len)
+                    (or (.-addresses node) (repeat len nil))
+                    (or (.-children node)  (repeat len nil)))
+                  (reduce + 0))
+               len))))))))
+
+(defn durable-ratio
+  ([set]
+   (double (durable-ratio (.-address set) (.-root set))))
+  ([address node]
+   (cond
+     (some? address)       1.0
+     (instance? Leaf node) 0.0
+     :else
+     (let [len (.len node)]
+       (/ (->>
+            (map
+              (fn [_ child-addr child]
+                (durable-ratio child-addr child))
+              (range len)
+              (.-addresses ^Branch node)
+              (.-children ^Branch node))
+            (reduce + 0))
+         len)))))
+
+(deftest test-lazy-remove
+  "Check that invalidating middle branch does not invalidates siblings"
+  (let [size 7000 ;; 3-4 branches
+        xs   (shuffle (range size))
+        set  (into (set/sorted-set* {:branching-factor 64}) xs)]
+    (set/store set (storage))
+    ; (is (= 1.0 (durable-ratio set))
+    ;   (let [set' (disj set 3500)] ;; one of the middle branches
+    ;     (is (< 0.98 (durable-ratio set')))))
+    ))
+
 ; (deftest stresstest-stable-addresses
 ;   (let [size      10000
 ;         adds      (shuffle (range size))

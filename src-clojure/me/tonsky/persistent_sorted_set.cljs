@@ -1,13 +1,11 @@
 (ns ^{:doc
       "A B-tree based persistent sorted set. Supports transients, custom comparators, fast iteration, efficient slices (iterator over a part of the set) and reverse slices. Almost a drop-in replacement for [[clojure.core/sorted-set]], the only difference being this one can't store nil."
       :author "Nikita Prokopov"}
- me.tonsky.persistent-sorted-set
+  me.tonsky.persistent-sorted-set
   (:refer-clojure :exclude [conj disj sorted-set sorted-set-by iter])
-  (:require
-   [me.tonsky.persistent-sorted-set.arrays :as arrays]
-   [await-cps :refer [await] :refer-macros [async]])
-  (:require-macros
-   [me.tonsky.persistent-sorted-set.macros :refer [async+sync]]))
+  (:require-macros [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])
+  (:require [me.tonsky.persistent-sorted-set.arrays :as arrays]
+            [await-cps :refer [await] :refer-macros [async]]))
 
 ; B+ tree
 ; -------
@@ -1467,18 +1465,18 @@
 (defn store
   "Store the set to storage. Returns map with :root-address, :shift, :count.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
-  ([set] (store set {}))
   ([^BTSet set opts]
+   (store set (.-storage set) opts))
+  ([^BTSet set storage {:keys [sync?] :or {sync? true} :as opts}]
    (assert (instance? BTSet set))
-   (let [{:keys [sync?] :or {sync? true}} opts
-         storage (.-storage set)]
-     (async+sync sync? {async do, await do}
-       (async
-         (let [root-addr (await (store-node (.-root set) storage opts))]
-           {:root-address root-addr
-            :shift (.-shift set)
-            :count (.-cnt set)
-            :comparator (.-comparator set)}))))))
+   (assert (implements? me.tonsky.persistent-sorted-set/IStorage storage))
+   (async+sync sync? {async do, await do}
+     (async
+       (let [root-addr (await (store-node (.-root set) storage opts))]
+         {:root-address root-addr
+          :shift (.-shift set)
+          :count (.-cnt set)
+          :comparator (.-comparator set)})))))
 
 (defn restore
   "Restore a set from storage given root-address-or-info and storage.
