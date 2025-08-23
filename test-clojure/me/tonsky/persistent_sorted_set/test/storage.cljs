@@ -182,6 +182,14 @@
                       (is (every? node? children))
                       (is (= [255 511 1023] root-keys))))))))))))))))
 
+;;; uses ensure-root
+;; slice
+;; rslice
+;; contains
+;; conj
+;; disj
+;; count
+;; walk-addresses
 
 
 ; (defn loaded-ratio

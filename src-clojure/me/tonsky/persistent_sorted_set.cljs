@@ -515,14 +515,15 @@
 (defn- ensure-root
   ([^BTSet set]
    (ensure-root set {}))
-  ([^BTSet set {:keys [sync?] :or {sync? true}}]
+  ([^BTSet set {:keys [sync?] :or {sync? true} :as opts}]
    (assert (or (some? (.-address set)) (some? (.-root set))))
    (assert (some? (.-storage set)))
    (async+sync sync? {async do, await do}
-     (do
-       (when (and (nil? (.-root set)) (some? (.-address set)))
-         (set! (.-root set) (await (-restore (.-storage set) (.-address set))))))
-       (.-root set))))
+     (async
+       (do
+         (when (and (nil? (.-root set)) (some? (.-address set)))
+           (set! (.-root set) (await (-restore (.-storage set) (.-address set) opts)))))
+       (.-root set)))))
 
 (defn- ensure-child
   "Get child at index, with lazy restoration if needed.
@@ -532,7 +533,7 @@
    ;; Simple case - no storage, just return the child
    (when (instance? Node node)
      (arrays/aget (.-children node) idx)))
-  ([node idx storage {:keys [sync?] :or {sync? true}}]
+  ([node idx storage {:keys [sync?] :or {sync? true} :as opts}]
    (async+sync sync? {async do, await do}
      (async
       (when (instance? Node node)
