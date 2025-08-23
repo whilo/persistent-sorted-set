@@ -51,9 +51,13 @@
         address (set/store set storage)]
     (set/restore address storage)))
 
-(defn children [node] (.-children node))
+(defn children [node] (some->> (.-children node) (filter some?)))
 
-(deftest basics
+(defn ks [node] (some->> (.-keys node) (filterv some?)))
+
+(defn node? [o] (instance? Node o))
+
+(deftest ascending-insert-test
   (and
    (testing "one item"
      (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
@@ -131,7 +135,41 @@
                  (is (= 16 (count (.-keys (nth children 0)))))
                  (is (instance? Leaf (nth children 1)))
                  (is (= 17 (count (.-keys (nth children 1)))))))
-              (is (= 3 (:reads @*stats))))))))))))
+              (is (= 3 (:reads @*stats))))))))))
+   (testing "32^2"
+     (reset! *stats {:reads 0 :writes 0 :accessed 0})
+     (let [original  (into (set/sorted-set* {}) (range 0 1024))]
+       (and
+        (is (= 0 (:writes @*stats)))
+        (is (= 0 (:reads @*stats)))
+        (is (instance? Node (.-root original)))
+        (let [children (children (.-root original))
+              root-keys (ks (.-root original))]
+          (and
+           (is (= 3 (count children)))
+           (is (every? node? children))
+           (is (= [255 511 1023] root-keys))
+           (is (nil? (.-address original)))
+           (let [storage (storage)
+                 address (set/store original storage)]
+             (and
+              (is (uuid? address))
+              (is (= address (.-address original)))
+              (is (= 67 (:writes @*stats)))
+              (is (= 0 (:reads @*stats)))
+              (let [restored (set/restore address storage {})]
+                (and
+                 ; (is (= restored original))
+                 (is (= 67 (:reads @*stats)))
+                 (let [children (children (.-root restored))
+                       root-keys (ks (.-root original))]
+                   (and
+                    (is (= 3 (count children)))
+                    (is (= 3 (count root-keys)))
+                    (is (every? node? children))
+                    (is (= [255 511 1023] root-keys)))))))))))))))
+
+
 
 ; (defn loaded-ratio
 ;   ([set]
