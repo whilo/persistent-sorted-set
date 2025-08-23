@@ -512,6 +512,18 @@
   (-pr-writer [this writer opts]
     (pr-sequential-writer writer pr-writer "#{" " " "}" opts (seq this))))
 
+(defn- ensure-root
+  ([^BTSet set]
+   (ensure-root set {}))
+  ([^BTSet set {:keys [sync?] :or {sync? true}}]
+   (assert (or (some? (.-address set)) (some? (.-root set))))
+   (assert (some? (.-storage set)))
+   (async+sync sync? {async do, await do}
+     (do
+       (when (and (nil? (.-root set)) (some? (.-address set)))
+         (set! (.-root set) (await (-restore (.-storage set) (.-address set))))))
+       (.-root set))))
+
 (defn- ensure-child
   "Get child at index, with lazy restoration if needed.
    When storage is provided, supports lazy restoration.
@@ -520,23 +532,22 @@
    ;; Simple case - no storage, just return the child
    (when (instance? Node node)
      (arrays/aget (.-children node) idx)))
-  ([node idx storage opts]
-   (let [{:keys [sync?] :or {sync? true}} opts]
-     (async+sync sync? {async do, await do}
-                 (async
-                   (when (instance? Node node)
-                     ;; Initialize children array if needed
-                     (when (nil? (.-children node))
-                       (set! (.-children node) (arrays/make-array (arrays/alength (.-addresses node)))))
+  ([node idx storage {:keys [sync?] :or {sync? true}}]
+   (async+sync sync? {async do, await do}
+     (async
+      (when (instance? Node node)
+        ;; Initialize children array if needed
+        (when (nil? (.-children node))
+          (set! (.-children node) (arrays/make-array (arrays/alength (.-addresses node)))))
 
-                     (if-let [child (arrays/aget (.-children node) idx)]
-                       child
-                       ;; Lazy restoration from storage
-                       (when-let [addresses (.-addresses node)]
-                         (when-let [addr (arrays/aget addresses idx)]
-                           (let [child (await (-restore storage addr opts))]
-                             (arrays/aset (.-children node) idx child)
-                             child))))))))))
+        (if-let [child (arrays/aget (.-children node) idx)]
+          child
+          ;; Lazy restoration from storage
+          (when-let [addresses (.-addresses node)]
+            (when-let [addr (arrays/aget addresses idx)]
+              (let [child (await (-restore storage addr opts))]
+                (arrays/aset (.-children node) idx child)
+                child)))))))))
 
 
 (defn- keys-for

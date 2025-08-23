@@ -20,10 +20,6 @@
      :writes 0
      :accessed 0}))
 
-;; TODO
-;; + incorparate address into BTSet, alter-btset etc wherever constructed
-;; + shit => level on nodes
-
 (defrecord Storage [*memory *disk]
   set/IStorage
   (-store [_ node opts]
