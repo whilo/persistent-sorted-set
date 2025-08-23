@@ -168,7 +168,7 @@
               (is (= 0 (:reads @*stats)))
               (is (empty? (deref (:*memory storage))))
               (binding [*debug* true]
-                (let [restored (set/restore address storage {:count 1024})]       ;<--- XXX
+                (let [restored (set/restore address storage {:count 1024})]     ;<--- XXX
                   #_(and
                    (is (empty? (deref (:*memory storage))))
                    (is (= 0 (:reads @*stats)))
