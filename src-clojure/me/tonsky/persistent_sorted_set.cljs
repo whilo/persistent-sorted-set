@@ -430,21 +430,21 @@
 
 (def ^:const uninitialized-hash nil)
 
-(deftype BTSet [root shift cnt comparator meta ^:mutable _hash storage]
+(deftype BTSet [root shift cnt comparator meta ^:mutable _hash storage address]
   Object
   (toString [this] (pr-str* this))
 
   ICloneable
-  (-clone [_] (BTSet. root shift cnt comparator meta _hash storage))
+  (-clone [_] (BTSet. root shift cnt comparator meta _hash storage address))
 
   IWithMeta
-  (-with-meta [_ new-meta] (BTSet. root shift cnt comparator new-meta _hash storage))
+  (-with-meta [_ new-meta] (BTSet. root shift cnt comparator new-meta _hash storage address))
 
   IMeta
   (-meta [_] meta)
 
   IEmptyableCollection
-  (-empty [_] (BTSet. (Leaf. (arrays/array) nil) 0 0 comparator meta uninitialized-hash storage))
+  (-empty [_] (BTSet. (Leaf. (arrays/array) nil) 0 0 comparator meta uninitialized-hash storage address))
 
   IEquiv
   (-equiv [this other]
@@ -561,9 +561,9 @@
 
 (defn alter-btset
   ([^BTSet set root shift cnt]
-   (BTSet. root shift cnt (.-comparator set) (.-meta set) uninitialized-hash (.-storage set)))
+   (BTSet. root shift cnt (.-comparator set) (.-meta set) uninitialized-hash (.-storage set) (.-address set)))
   ([^BTSet set root shift cnt cmp]
-   (BTSet. root shift cnt cmp (.-meta set) uninitialized-hash (.-storage set))))
+   (BTSet. root shift cnt cmp (.-meta set) uninitialized-hash (.-storage set) (.-address set))))
 
 ;; iteration
 
@@ -1415,8 +1415,8 @@
      (loop [current-level leaves
             shift 0]
        (case (count current-level)
-         0 (BTSet. (Leaf. (arrays/array) nil) 0 0 cmp nil uninitialized-hash storage)
-         1 (BTSet. (first current-level) shift (arrays/alength arr) cmp nil uninitialized-hash storage)
+         0 (BTSet. (Leaf. (arrays/array) nil) 0 0 cmp nil uninitialized-hash storage nil)
+         1 (BTSet. (first current-level) shift (arrays/alength arr) cmp nil uninitialized-hash storage nil)
          (recur
           (->> current-level
                (arr-partition-approx min-len max-len)
@@ -1430,7 +1430,7 @@
     (from-sorted-array cmp arr)))
 
 (defn sorted-set-by
-  ([cmp] (BTSet. (Leaf. (arrays/array) nil) 0 0 cmp nil uninitialized-hash nil))
+  ([cmp] (BTSet. (Leaf. (arrays/array) nil) 0 0 cmp nil uninitialized-hash nil nil))
   ([cmp & keys] (from-sequential cmp keys)))
 
 (defn sorted-set
@@ -1444,7 +1444,7 @@
    - :meta     Metadata"
   [opts]
   (BTSet. (Leaf. (arrays/array) nil) 0 0 (or (:comparator opts) compare)
-          (:meta opts) uninitialized-hash (:storage opts)))
+          (:meta opts) uninitialized-hash (:storage opts) nil))
 
 (defn store
   "Accepts optional opts map with {:sync? true/false} (defaults to true).
@@ -1469,29 +1469,31 @@
 
 (defn restore
   "Restore a set from storage given root-address-or-info and storage.
-   First arg can be either:
-   - A root address (UUID) - requires opts with :shift and :count
-   - A map from store-set with :root-address, :shift, :count, :comparator
-   Storage operations will use the provided opts for sync/async mode."
+   + First arg can be either:
+     - A root address (UUID) - requires opts with :shift and :count
+     - A map from store-set with :root-address, :shift, :count, :comparator
+   + Storage operations will use the provided opts for sync/async mode.
+   + This operation is always synchronous and does not initiate io."
   ([root-address-or-info storage]
    (restore root-address-or-info storage {}))
   ([root-address-or-info storage opts]
-   (let [{:keys [sync?] :or {sync? true}} opts
-         ;; Handle both old format (bare UUID) and new format (map with metadata)
-         root-address (if (map? root-address-or-info)
+   (let [;; Handle both old format (bare UUID) and new format (map with metadata)
+         address      (if (map? root-address-or-info)
                         (:root-address root-address-or-info)
                         root-address-or-info)
-         ;; Use metadata from map if available, otherwise fall back to opts
-         shift (if (map? root-address-or-info)
-                 (:shift root-address-or-info)
-                 (:shift opts 0))
-         cnt (if (map? root-address-or-info)
-               (:count root-address-or-info)
-               (:count opts 0))
-         cmp (if (map? root-address-or-info)
-               (or (:comparator root-address-or-info) compare)
-               (or (:comparator opts) compare))]
-     (async+sync sync? {async do, await do}
-                 (async
-                   (let [root (await (-restore storage root-address opts))]
-                     (BTSet. root shift cnt cmp nil uninitialized-hash storage)))))))
+         _ (assert (some? address))
+         meta (or (and (map? root-address-or-info) (:meta root-address-or-info))
+                  (:meta opts))
+         shift        (if (map? root-address-or-info)
+                        (:shift root-address-or-info)
+                        (:shift opts 0))
+         cnt          (if (map? root-address-or-info)
+                        (:count root-address-or-info)
+                        (:count opts 0))
+         cmp          (if (map? root-address-or-info)
+                        (or (:comparator root-address-or-info) compare)
+                        (or (:comparator opts) compare))]
+   ;(IPersistentMap meta, Comparator<Key> cmp, Address address, IStorage<Key, Address> storage, Object root, int count, Settings settings, int version)
+   ;(PersistentSortedSet. nil cmp address storage nil -1 (map->settings opts) 0)
+   #_(BTSet root shift cnt cmp meta ^:mutable _hash storage address)
+     (BTSet. nil shift cnt cmp meta uninitialized-hash storage address))))

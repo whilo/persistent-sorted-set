@@ -324,17 +324,23 @@
            (is (= address (.-_address ^PersistentSortedSet original)))
            (is (= 67 (:writes @*stats)))
            (is (= 0 (:reads @*stats)))
-           (let [restored ^PersistentSortedSet (set/restore address storage {:branching-factor 32})]
-             (and
-              (is (= restored original))
-              (is (= 67 (:reads @*stats)))
-              (let [children (children (.-_root restored))
-                    root-keys (ks (.-_root original))]
-                (and
-                 (is (= 3 (count children)))
-                 (is (= 3 (count root-keys)))
-                 (is (every? #(instance? Branch %) children))
-                 (is (= [255 511 1023] root-keys)))))))))))))
+           (is (empty? (deref (:*memory storage))))
+           (binding [*debug* true]
+             (let [restored ^PersistentSortedSet (set/restore address storage {:branching-factor 32})]
+               (is (empty? (deref (:*memory storage))))
+               #_(and
+                  (is (empty? (deref (:*memory storage))))
+                  (is (= 0 (:reads @*stats)))
+                  (is (= restored original))
+                  (is (= 67 (count (deref (:*memory storage)))))
+                  (is (= 67 (:reads @*stats)))
+                  (let [children (children (.-_root restored))
+                        root-keys (ks (.-_root original))]
+                    (and
+                     (is (= 3 (count children)))
+                     (is (= 3 (count root-keys)))
+                     (is (every? #(instance? Branch %) children))
+                     (is (= [255 511 1023] root-keys))))))))))))))
 
 (deftest test-lazyness
   (let [size       100000

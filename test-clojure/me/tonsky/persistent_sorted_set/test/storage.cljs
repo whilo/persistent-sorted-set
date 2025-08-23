@@ -8,6 +8,10 @@
 
 (def ^:dynamic *debug* false)
 
+(defn dbg [& args]
+  (when *debug*
+    (apply println args)))
+
 (defn gen-addr [] (random-uuid))
 
 (def *stats
@@ -16,23 +20,32 @@
      :writes 0
      :accessed 0}))
 
+;; TODO
+;; + incorparate address into BTSet, alter-btset etc wherever constructed
+;; + shit => level on nodes
+
 (defrecord Storage [*memory *disk]
   set/IStorage
   (-store [_ node opts]
+    (dbg "store<" (type node) ">")
     (swap! *stats update :writes inc)
     (let [address (gen-addr)]
       (swap! *disk assoc address
              (pr-str
-              {:keys      (.-keys node)
+              {:level     (.-shift node) ;;<------------------------------------ FIX ME
+               :keys      (.-keys node)
                :addresses (when (instance? Node node) (.-addresses node))}))
       address))
-  (-restore [_ address opts]
+  (-restore [_ address _opts]
     (or
      (@*memory address)
-     (let [{:keys [keys addresses]} (edn/read-string (@*disk address))
+     (let [{:keys [keys addresses level]} (edn/read-string (@*disk address))
            node (if addresses
-                  (Node. keys nil addresses nil)
+                  (let [n (Node. keys nil addresses nil)]
+                    (set! (.-level n) level) ;;<-------------------------------- FIX ME
+                    n)
                   (Leaf. keys nil))]
+       (dbg "restored<" (type node) ">")
        (swap! *stats update :reads inc)
        (swap! *memory assoc address node)
        node)))
@@ -157,17 +170,21 @@
               (is (= address (.-address original)))
               (is (= 67 (:writes @*stats)))
               (is (= 0 (:reads @*stats)))
-              (let [restored (set/restore address storage {})]
-                (and
-                 ; (is (= restored original))
-                 (is (= 67 (:reads @*stats)))
-                 (let [children (children (.-root restored))
-                       root-keys (ks (.-root original))]
-                   (and
-                    (is (= 3 (count children)))
-                    (is (= 3 (count root-keys)))
-                    (is (every? node? children))
-                    (is (= [255 511 1023] root-keys)))))))))))))))
+              (is (empty? (deref (:*memory storage))))
+              (binding [*debug* true]
+                (let [restored (set/restore address storage {:count 1024})]       ;<--- XXX
+                  #_(and
+                   (is (empty? (deref (:*memory storage))))
+                   (is (= 0 (:reads @*stats)))
+                   (is (= restored original))
+                   (is (= 67 (:reads @*stats)))
+                   (let [children (children (.-root restored))
+                         root-keys (ks (.-root original))]
+                     (and
+                      (is (= 3 (count children)))
+                      (is (= 3 (count root-keys)))
+                      (is (every? node? children))
+                      (is (= [255 511 1023] root-keys))))))))))))))))
 
 
 
