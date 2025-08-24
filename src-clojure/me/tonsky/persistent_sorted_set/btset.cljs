@@ -14,7 +14,304 @@
                      return-array merge-n-split check-n-splice]]
             [await-cps :refer [await] :refer-macros [async]]))
 
-(declare iter riter -seek* -rseek* -rpath)
+(declare iter riter -seek* -rseek* -rpath BTSet)
+
+(defn alter
+  ([^BTSet set root shift cnt]
+   (BTSet. root shift cnt (.-comparator set) (.-meta set) uninitialized-hash (.-storage set) (.-address set)))
+  ([^BTSet set root shift cnt cmp]
+   (BTSet. root shift cnt cmp (.-meta set) uninitialized-hash (.-storage set) (.-address set))))
+
+(defn- ensure-root
+  ([^BTSet set]
+   (ensure-root set {}))
+  ([^BTSet set {:keys [sync?] :or {sync? true} :as opts}]
+   (assert (or (some? (.-address set)) (some? (.-root set))))
+   (assert (some? (.-storage set)))
+   (async+sync sync?
+    (async
+      (do
+        (when (and (nil? (.-root set)) (some? (.-address set)))
+          (set! (.-root set) (await (-restore (.-storage set) (.-address set) opts)))))
+      (.-root set)))))
+
+(defn conjoin
+  [^BTSet set key cmp {:keys [sync?] :or {sync? true} :as opts}]
+  (async+sync sync?
+              (async
+               (let [roots (await (impl/node-conj (.-root set) cmp key (.-storage set) opts))]
+                 (cond
+                   ;; tree not changed
+                   (nil? roots)
+                   set
+
+                   ;; keeping single root
+                   (== (arrays/alength roots) 1)
+                   (alter set
+                          (arrays/aget roots 0)
+                          (.-shift set)
+                          (inc (.-cnt set)))
+
+                   ;; introducing new root
+                   :else
+                   (alter set
+                          (Node. (arrays/amap node-lim-key roots) roots nil nil)
+                          (inc (.-shift set))
+                          (inc (.-cnt set))))))))
+
+(defn disjoin
+  [^BTSet set key cmp {:keys [sync?] :or {sync? true} :as opts}]
+  (async+sync sync?
+              (async
+               (let [new-roots (await (impl/node-disj (.-root set) cmp key true nil nil (.-storage set) opts))]
+                 (if (nil? new-roots) ;; nothing changed, key wasn't in the set
+                   set
+                   (let [new-root (arrays/aget new-roots 0)]
+                     (if (and (instance? Node new-root)
+                              (== 1 (arrays/alength (.-children new-root))))
+
+                       ;; root has one child, make him new root
+                       (alter set
+                              (arrays/aget (.-children new-root) 0)
+                              (dec (.-shift set))
+                              (dec (.-cnt set)))
+
+                       ;; keeping root level
+                       (alter set
+                              new-root
+                              (.-shift set)
+                              (dec (.-cnt set))))))))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(defn- prev-path-async
+  "Async version of prev-path that returns channel with previous path"
+  [set ^number path]
+  (async
+    (if (> (path-get path (inc (.-shift set))) 0) ;; overflow
+      (if (.-storage set)
+        (await (-rpath (.-root set) path (.-shift set) (.-storage set) {:sync? false}))
+        (-rpath (.-root set) path (.-shift set)))
+      (or
+       (await (-prev-path set (.-root set) path (.-shift set) {:sync? false}))
+       (path-dec empty-path)))))
+
+
+(defn- node-requires-storage?
+  "Check if a node itself needs to be loaded from storage"
+  [node]
+  (and (instance? Node node)
+       (.-addresses node)           ; Has storage addresses
+       (nil? (.-children node))))   ; But children not loaded yet
+
+(defn- slice-path-requires-storage?
+  "Check if any nodes in the slice path need storage access.
+   This is the critical optimization - only check nodes that
+   the slice operation will actually traverse."
+  [^BTSet set node key-from key-to level]
+  (let [cmp (.-comparator set)
+        keys (.-keys node)]
+    (when (instance? Node node)
+      (let [keys-l (arrays/alength keys)
+            ;; Find which children the slice bounds span
+            from-idx (if key-from
+                       (binary-search-l cmp keys (- keys-l 2) key-from)
+                       0)
+            to-idx   (if key-to
+                       (binary-search-r cmp keys (- keys-l 2) key-to)
+                       (dec (arrays/alength (.-addresses node))))]
+
+        ;; Only check nodes that are actually in the slice path
+        (loop [idx from-idx]
+          (when (<= idx to-idx)
+            (let [;; Check if this child needs loading
+                  child-addr (when (.-addresses node)
+                               (arrays/aget (.-addresses node) idx))
+                  child-loaded? (when (.-children node)
+                                  (arrays/aget (.-children node) idx))]
+              (if (and child-addr (not child-loaded?))
+                ;; Found unloaded node in slice path
+                true
+                ;; This child is loaded, recurse if needed
+                (if (and child-loaded? (> level 1))
+                  ;; Recursively check this child's path requirements
+                  (or (slice-path-requires-storage? set child-loaded? key-from key-to (dec level))
+                      ;; Move to next child in slice range
+                      (recur (inc idx)))
+                  ;; Move to next child in slice range
+                  (recur (inc idx)))))))))))
+
+
+
+;;;-----------------------------------------------------------------------------
+(defn slice [^BTSet set key-from key-to comparator]
+  (when-some [path (-seek* set key-from comparator)]
+    (let [till-path (-rseek* set key-to comparator)]
+      (when (path-lt path till-path)
+        (Iter. set path till-path (keys-for set path) (path-get path 0))))))
+;;;-----------------------------------------------------------------------------
+
+(defprotocol IAsyncSeq
+  (-afirst [this] "Returns async expression yielding first element")
+  (-arest [this] "Returns async expression yielding rest of sequence"))
+
+(deftype AsyncSeq [^BTSet set path till-path ^:mutable keys ^:mutable idx]
+  IAsyncSeq
+  (-afirst [this]
+    (async
+      (when (and path (path-lt path till-path))
+        ;; Load keys only if not cached
+        (when (nil? keys)
+          (set! keys (await (keys-for set path {:sync? false})))
+          (set! idx (path-get path 0)))
+        (arrays/aget keys idx))))
+
+  (-arest [this]
+    (async
+      (when (and path (path-lt path till-path))
+        ;; Load keys only if not cached
+        (when (nil? keys)
+          (set! keys (await (keys-for set path {:sync? false})))
+          (set! idx (path-get path 0)))
+        (if (< (inc idx) (arrays/alength keys))
+          ;; Next element is in same leaf - reuse keys array!
+          (AsyncSeq. set (path-inc path) till-path keys (inc idx))
+          ;; Need to move to next leaf
+          (let [next-path (await (next-path-async set path))]
+            (when (and next-path (path-lt next-path till-path))
+              ;; Don't pass keys - will be loaded lazily for new leaf
+              (AsyncSeq. set next-path till-path nil nil)))))))
+  Object
+  (toString [this]
+    (str "AsyncSeq[" (path-str path) " -> " (path-str till-path) "]"))
+  IPrintWithWriter
+  (-pr-writer [this writer opts]
+    (-write writer (str this))))
+
+(defn async-seq
+  "Create an async sequence from a BTSet and path range"
+  [set path till-path]
+  (when (and path (path-lt path till-path))
+    (AsyncSeq. set path till-path nil nil)))
+
+;;;-----------------------------------------------------------------------------
+(defn async-slice
+  "Async version of slice that returns an AsyncSeq."
+  [^BTSet set key-from key-to comparator]
+  (async
+    (when-some [path (await (-seek* set key-from comparator {:sync? false}))]
+      (let [till-path (await (-rseek* set key-to comparator {:sync? false}))]
+        (async-seq set path till-path)))))
+;;;-----------------------------------------------------------------------------
+
+(defn arr-map-inplace [f arr]
+  (let [len (arrays/alength arr)]
+    (loop [i 0]
+      (when (< i len)
+        (arrays/aset arr i (f (arrays/aget arr i)))
+        (recur (inc i))))
+    arr))
+
+(defn arr-partition-approx
+  "Splits `arr` into arrays of size between min-len and max-len,
+   trying to stick to (min+max)/2"
+  [min-len max-len arr]
+  (let [chunk-len avg-len
+        len       (arrays/alength arr)
+        acc       (transient [])]
+    (when (pos? len)
+      (loop [pos 0]
+        (let [rest (- len pos)]
+          (cond
+            (<= rest max-len)
+            (conj! acc (.slice arr pos))
+            (>= rest (+ chunk-len min-len))
+            (do
+              (conj! acc (.slice arr pos (+ pos chunk-len)))
+              (recur (+ pos chunk-len)))
+            :else
+            (let [piece-len (arrays/half rest)]
+              (conj! acc (.slice arr pos (+ pos piece-len)))
+              (recur (+ pos piece-len)))))))
+    (to-array (persistent! acc))))
+
+(defn- sorted-arr-distinct? [arr cmp]
+  (let [al (arrays/alength arr)]
+    (if (<= al 1)
+      true
+      (loop [i 1
+             p (arrays/aget arr 0)]
+        (if (>= i al)
+          true
+          (let [e (arrays/aget arr i)]
+            (if (== 0 (cmp e p))
+              false
+              (recur (inc i) e))))))))
+
+(defn sorted-arr-distinct
+  "Filter out repetitive values in a sorted array.
+   Optimized for no-duplicates case"
+  [arr cmp]
+  (if (sorted-arr-distinct? arr cmp)
+    arr
+    (let [al (arrays/alength arr)]
+      (loop [acc (transient [(arrays/aget arr 0)])
+             i   1
+             p   (arrays/aget arr 0)]
+        (if (>= i al)
+          (into-array (persistent! acc))
+          (let [e (arrays/aget arr i)]
+            (if (== 0 (cmp e p))
+              (recur acc (inc i) e)
+              (recur (conj! acc e) (inc i) e))))))))
+
+(declare store-node)
+
+(defn make-node-from-storage
+  "Create a Node with addresses for lazy restoration"
+  [keys addresses]
+  (Node. keys nil (into-array addresses) nil))
+
+(defn make-leaf-from-storage
+  "Create a Leaf from stored data"
+  [keys]
+  (Leaf. keys nil))
+
+(defn- store-node
+  "Store a node recursively. Returns address or channel depending on sync mode."
+  [node storage  {:keys [sync?] :or {sync? true} :as opts}]
+  (async+sync sync?
+              (cond
+                (instance? Leaf node)
+                (-store storage node opts)
+
+                (instance? Node node)
+                (async
+                 (let [children (.-children node)
+                       addresses (arrays/make-array (arrays/alength children))]
+                   ;; store children first
+                   (dotimes [i (arrays/alength children)]
+                     (let [child (arrays/aget children i)
+                           addr (await (store-node child storage opts))]
+                       (arrays/aset addresses i addr)))
+                   ;; Then store this node with addresses
+                   (let [node-with-addresses (Node. (.-keys node) nil addresses nil)
+                         final-addr (await (-store storage node-with-addresses opts))]
+                     final-addr)))
+
+                :else
+                (throw (ex-info "Unknown node type" {:node node :type (type node)})))))
 
 (defn- path-inc ^number [^number path]
   (inc path))
@@ -229,8 +526,10 @@
 (defprotocol IIter
   (-copy [this left right]))
 
+;;;-----------------------------------------------------------------------------
 (defprotocol ISeek
   (-seek [this key] [this key comparator]))
+;;;-----------------------------------------------------------------------------
 
 (deftype Iter [^BTSet set left right keys idx]
   IIter

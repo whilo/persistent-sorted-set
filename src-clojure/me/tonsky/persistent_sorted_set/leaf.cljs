@@ -8,8 +8,6 @@
                      return-array merge-n-split]]
             [await-cps :refer [await] :refer-macros [async]]))
 
-(declare Leaf)
-
 (deftype Leaf [keys ^:mutable _hash]
   Object
   (toString [_] (pr-str* (vec keys)))

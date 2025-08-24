@@ -2,7 +2,6 @@
   (:require-macros [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])
   (:require [me.tonsky.persistent-sorted-set.arrays :as arrays]
             [me.tonsky.persistent-sorted-set.constants :refer [max-len]]
-            [me.tonsky.persistent-sorted-set.leaf :as leaf]
             [me.tonsky.persistent-sorted-set.protocols :refer [INode] :as impl]
             [me.tonsky.persistent-sorted-set.util
              :refer [rotate lookup-exact splice cut-n-splice binary-search-l
