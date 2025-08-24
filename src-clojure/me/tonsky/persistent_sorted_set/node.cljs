@@ -42,9 +42,31 @@
       -1
       idx)))
 
+(defn ensure-children [node]
+  (when (nil? (.-children node))
+    (set! (.-children node) (make-array (alength (.-keys node)))))
+  (.-children node))
+
 (defn- $child-storage
   [^Node node storage idx {:keys [sync?] :or {sync? true} :as opts}]
-  (throw (js/Error. "unimplemented")))
+  (assert (and (<= 0 idx) (< idx (alength (.-keys node)))))
+  (assert (or (and (some? (.-children node)) (some? (aget (.-children node) idx)))
+              (and (some? (.-addresses node)) (some? (aget (.-addresses node) idx)))))
+  (async+sync sync?
+    (async
+     (let [child (when (some? (.-children node))
+                   (aget (.-children node) idx))]
+       (if (nil? child)
+         (let [addr (aget (.-address node) idx)
+               _(assert (some? addr))
+               child (await (impl/restore storage addr opts))]
+           (aset (ensure-children) idx child)
+           child)
+         (do
+           (when-some [addr (and (some? (.-addresses node))
+                                 (aget (.-addresses node) idx))]
+             (impl/accessed storage addr))
+           child))))))
 
 (defn- $count
   [^Node node storage {:keys [sync?] :or {sync? true} :as opts}]
@@ -76,6 +98,8 @@
       (return-array
        (Node. (arrays/aget ks 0) (arrays/aget ps 0) nil nil)
        (Node. (arrays/aget ks 1) (arrays/aget ps 1) nil nil))))
+
+  (node-count [this storage opts] ($count this storage opts))
 
   (node-lookup [this cmp key storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts

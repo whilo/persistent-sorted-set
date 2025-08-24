@@ -24,6 +24,12 @@
                         (return-array (Leaf. (arrays/aget ks 0) nil)
                                       (Leaf. (arrays/aget ks 1) nil))))
 
+  (node-count [this _storage _opts]
+    (let [{:keys [sync?] :or {sync? true}} opts]
+      (if sync?
+        (alength keys)
+        (async (alength keys)))))
+
   (node-lookup [_ cmp key storage opts]
                (let [{:keys [sync?] :or {sync? true}} opts
                      idx (lookup-exact cmp keys key)
