@@ -25,7 +25,7 @@
 
 (defrecord Storage [*memory *disk]
   IStorage
-  (-store [_ node opts]
+  (store [_ node opts]
     (dbg "store<" (type node) ">")
     (swap! *stats update :writes inc)
     (let [address (gen-addr)]
@@ -35,7 +35,7 @@
                :keys      (.-keys node)
                :addresses (when (instance? Node node) (.-addresses node))}))
       address))
-  (-restore [_ address _opts]
+  (restore [_ address _opts]
     (or
      (@*memory address)
      (let [{:keys [keys addresses level]} (edn/read-string (@*disk address))
@@ -48,10 +48,10 @@
        (swap! *stats update :reads inc)
        (swap! *memory assoc address node)
        node)))
-  (-accessed [_ address]
+  (accessed [_ address]
     (swap! *stats update :accessed inc)
     nil)
-  (-delete [this addresses] (throw (js/Error. "unimplemented"))))
+  (delete [this addresses] (throw (js/Error. "unimplemented"))))
 
 (defn storage
   ([] (->Storage (atom {}) (atom {})))

@@ -14,7 +14,7 @@
   (-arest [this] "Returns async expression yielding rest of sequence"))
 
 (defprotocol IStorage
-  (-store [this node opts])
-  (-restore [this address opts])
-  (-accessed [this address])
-  (-delete [this addresses]))
+  (store [this node opts])
+  (restore [this address opts])
+  (accessed [this address])
+  (delete [this addresses]))

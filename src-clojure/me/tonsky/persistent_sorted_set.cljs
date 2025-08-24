@@ -3,10 +3,8 @@
       :author "Nikita Prokopov"}
   me.tonsky.persistent-sorted-set
   (:refer-clojure :exclude [conj disj sorted-set sorted-set-by iter contains?])
-  (:require-macros [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])
   (:require [me.tonsky.persistent-sorted-set.arrays :as arrays]
-            [me.tonsky.persistent-sorted-set.btset :as btset]
-            [await-cps :refer [await] :refer-macros [async]]))
+            [me.tonsky.persistent-sorted-set.btset :as btset]))
 
 ; B+ tree
 ; -------
@@ -38,29 +36,6 @@
 ;           idx       :: Cached idx in keys array
 ; Keys and idx are cached for fast iteration inside a leaf"
 
-
-
-(defn- path-str [^number path]
-  #_(loop [res ()
-         path path]
-    (if (not= path 0)
-      (recur (cljs.core/conj res (mod path max-len)) (Math/floor (/ path max-len)))
-      (vec res))))
-
-(defn- next-path-async
-  "Async version of next-path that returns channel with next path"
-  [set ^number path]
-  #_
-  (async+sync false
-              (async
-               (if (neg? path)
-                 empty-path
-                 (or
-                  (await (-next-path set (.-root set) path (.-shift set) {:sync? false}))
-                  (path-inc (if (.-storage set)
-                              (await (-rpath (.-root set) empty-path (.-shift set) (.-storage set) {:sync? false}))
-                              (-rpath (.-root set) empty-path (.-shift set)))))))))
-
 (defn requires-storage-access?
   "Fast check if a slice operation will need to access storage.
    Returns true if any nodes in the slice path are not loaded yet."
@@ -74,10 +49,6 @@
         ;; Tree traversal needed - check path nodes
         (or (node-requires-storage? root)
             (slice-path-requires-storage? set root key-from key-to shift))))))
-
-
-
-;; Public interface
 
 (defn contains?
   ([^BTSet set key]

@@ -31,7 +31,7 @@
           ;; Lazy restoration from storage
           (when-let [addresses (.-addresses node)]
             (when-let [addr (arrays/aget addresses idx)]
-              (let [child (await (impl/-restore storage addr opts))]
+              (let [child (await (impl/restore storage addr opts))]
                 (arrays/aset (.-children node) idx child)
                 child)))))))))
 
