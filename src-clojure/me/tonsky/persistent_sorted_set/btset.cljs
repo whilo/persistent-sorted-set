@@ -63,8 +63,13 @@
 #!------------------------------------------------------------------------------
 
 (defn $count
-  [^BTSet set opts]
-  (throw (js/Error. "unimplemented")))
+  [^BTSet set {:keys [sync?] :or {sync? true} :as opts}]
+  (async+sync sync?
+    (do
+      (when (neg? (.-cnt set))
+        (let [root (await (ensure-root set opts))]
+          (set! (.-cnt set) (await (impl/node-count root (.-storage set) opts)))))
+      (.-cnt set))))
 
 (defn $contains?
   [^BTSet set key {:keys [sync?] :or {sync? true} :as opts}]
@@ -938,7 +943,7 @@
   ; (-comparator [this] comparator)
 
   ICounted
-  (-count [_] cnt)
+  (-count [this] ($count this {:sync? true}))
 
   IEditableCollection
   (-as-transient [this] this)

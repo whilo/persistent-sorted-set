@@ -42,6 +42,20 @@
       -1
       idx)))
 
+(defn- $child-storage
+  [^Node node storage idx {:keys [sync?] :or {sync? true} :as opts}]
+  (throw (js/Error. "unimplemented")))
+
+(defn- $count
+  [^Node node storage {:keys [sync?] :or {sync? true} :as opts}]
+  (async+sync sync?
+    (async
+      (let [*cnt (atom 0)]
+        (dotimes [i (alength (.-keys node))]
+          (let [child (await ($child-storage node storage i opts))]
+            (swap! *cnt + (await (impl/node-count child storage opts)))))
+        @*cnt))))
+
 (deftype Node [keys ^:mutable children ^:mutable addresses ^:mutable _hash]
   Object
   (toString [_] (pr-str* (vec keys)))

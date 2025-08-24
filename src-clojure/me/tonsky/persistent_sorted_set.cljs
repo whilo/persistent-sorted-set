@@ -37,18 +37,16 @@
 ; Keys and idx are cached for fast iteration inside a leaf"
 
 (defn count
-  ([set])
-  ([set opts]))
+  ([set] (btset/$count set {:sync? true}))
+  ([set opts] (btset/$count set opts)))
 
 (defn contains?
-  ([^BTSet set key]
-   (btset/$contains? set key {:sync? true}))
-  ([^BTSet set key opts]
-   (btset/$contains? set key opts)))
+  ([^BTSet set key] (btset/$contains? set key {:sync? true}))
+  ([^BTSet set key opts] (btset/$contains? set key opts)))
 
 (defn equivalent?
-  ([a b])
-  ([a b opts]))
+  ([set other] (btset/$equivalent? set other {:sync? true}))
+  ([set other opts] (btset/$equivalent? set other opts)))
 
 (defn conj
   "Analogue to [[clojure.core/conj]] but with comparator that overrides the one stored in set.

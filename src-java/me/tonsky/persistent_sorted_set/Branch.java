@@ -91,6 +91,9 @@ public class Branch<Key, Address> extends ANode<Key, Address> {
     return address;
   }
 
+
+
+
   public ANode<Key, Address> child(IStorage storage, int idx) {
     assert 0 <= idx && idx < _len;
     assert (_children != null && _children[idx] != null) || (_addresses != null && _addresses[idx] != null);
@@ -121,6 +124,9 @@ public class Branch<Key, Address> extends ANode<Key, Address> {
     }
     return child;
   }
+
+
+
 
   @Override
   public int count(IStorage storage) {
