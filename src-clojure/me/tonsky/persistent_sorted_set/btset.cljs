@@ -1,9 +1,9 @@
 (ns me.tonsky.persistent-sorted-set.btset
-  (:refer-clojure :exclude [iter])
+  (:refer-clojure :exclude [iter sorted-set-by])
   (:require-macros [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])
   (:require [me.tonsky.persistent-sorted-set.arrays :as arrays]
             [me.tonsky.persistent-sorted-set.constants
-             :refer [max-len uninitialized-hash empty-path avg-len
+             :refer [min-len avg-len  max-len uninitialized-hash empty-path
                      bits-per-level max-safe-path max-safe-level bit-mask]]
             [me.tonsky.persistent-sorted-set.leaf :as leaf]
             [me.tonsky.persistent-sorted-set.node :as node]
@@ -115,15 +115,30 @@
    (or (await (impl/node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false}))
        not-found)))
 
+(defn restore
+  [root-address-or-info storage opts]
+  (let [;; Handle both old format (bare UUID) and new format (map with metadata)
+        address      (if (map? root-address-or-info)
+                       (:root-address root-address-or-info)
+                       root-address-or-info)
+        _ (assert (some? address))
+        meta (or (and (map? root-address-or-info) (:meta root-address-or-info))
+                 (:meta opts))
+        shift        (if (map? root-address-or-info)
+                       (:shift root-address-or-info)
+                       (:shift opts 0))
+        cnt          (if (map? root-address-or-info)
+                       (:count root-address-or-info)
+                       (:count opts 0))
+        cmp          (if (map? root-address-or-info)
+                       (or (:comparator root-address-or-info) compare)
+                       (or (:comparator opts) compare))]
+    ;(IPersistentMap meta, Comparator<Key> cmp, Address address, IStorage<Key, Address> storage, Object root, int count, Settings settings, int version)
+    ;(PersistentSortedSet. nil cmp address storage nil -1 (map->settings opts) 0)
+    #_(BTSet root shift cnt cmp meta ^:mutable _hash storage address)
+    (BTSet. nil shift cnt cmp meta uninitialized-hash storage address)))
 
 #!------------------------------------------------------------------------------
-
-
-
-
-
-
-
 
 
 (defn- prev-path-async
@@ -182,8 +197,6 @@
                       (recur (inc idx)))
                   ;; Move to next child in slice range
                   (recur (inc idx)))))))))))
-
-
 
 ;;;-----------------------------------------------------------------------------
 (defn slice [^BTSet set key-from key-to comparator]
@@ -317,32 +330,32 @@
 (defn make-leaf-from-storage
   "Create a Leaf from stored data"
   [keys]
-  (Leaf. keys nil))
+  (leaf/Leaf. keys nil))
 
 (defn- store-node
   "Store a node recursively. Returns address or channel depending on sync mode."
   [node storage  {:keys [sync?] :or {sync? true} :as opts}]
   (async+sync sync?
-              (cond
-                (instance? Leaf node)
-                (-store storage node opts)
+    (cond
+      (instance? leaf/Leaf node)
+      (-store storage node opts)
 
-                (instance? Node node)
-                (async
-                 (let [children (.-children node)
-                       addresses (arrays/make-array (arrays/alength children))]
-                   ;; store children first
-                   (dotimes [i (arrays/alength children)]
-                     (let [child (arrays/aget children i)
-                           addr (await (store-node child storage opts))]
-                       (arrays/aset addresses i addr)))
-                   ;; Then store this node with addresses
-                   (let [node-with-addresses (Node. (.-keys node) nil addresses nil)
-                         final-addr (await (-store storage node-with-addresses opts))]
-                     final-addr)))
+      (instance? node/Node node)
+      (async
+       (let [children (.-children node)
+             addresses (arrays/make-array (arrays/alength children))]
+         ;; store children first
+         (dotimes [i (arrays/alength children)]
+           (let [child (arrays/aget children i)
+                 addr (await (store-node child storage opts))]
+             (arrays/aset addresses i addr)))
+         ;; Then store this node with addresses
+         (let [node-with-addresses (node/Node. (.-keys node) nil addresses nil)
+               final-addr (await (impl/-store storage node-with-addresses opts))]
+           final-addr)))
 
-                :else
-                (throw (ex-info "Unknown node type" {:node node :type (type node)})))))
+      :else
+      (throw (ex-info "Unknown node type" {:node node :type (type node)})))))
 
 (defn- path-inc ^number [^number path]
   (inc path))
@@ -964,3 +977,42 @@
   IPrintWithWriter
   (-pr-writer [this writer opts]
               (pr-sequential-writer writer pr-writer "#{" " " "}" opts (seq this))))
+
+#!------------------------------------------------------------------------------
+#! Constructors
+
+(defn ^BTSet from-sorted-array
+  [cmp arr _len opts]
+  (let [leaves (->> arr
+                 (arr-partition-approx min-len max-len)
+                 (arr-map-inplace #(leaf/Leaf. % nil)))
+        storage (:storage opts)]
+    (loop [current-level leaves
+           shift 0]
+      (case (count current-level)
+        0 (BTSet. (leaf/Leaf. (arrays/array) nil) 0 0 cmp nil uninitialized-hash storage nil)
+        1 (BTSet. (first current-level) shift (arrays/alength arr) cmp nil uninitialized-hash storage nil)
+        (recur
+          (->> current-level
+            (arr-partition-approx min-len max-len)
+            (arr-map-inplace #(node/Node. (arrays/amap impl/node-lim-key %) % nil nil)))
+          (inc shift))))))
+
+(defn ^BTSet from-sequential [cmp seq]
+  (let [arr (-> (into-array seq) (arrays/asort cmp) (sorted-arr-distinct cmp))]
+    (from-sorted-array cmp arr (alength arr) {})))
+
+(defn sorted-set-by
+  ([cmp]
+   (BTSet. (leaf/Leaf. (arrays/array) nil) 0 0 cmp nil uninitialized-hash nil nil))
+  ([cmp & keys]
+   (from-sequential cmp keys)))
+
+(defn from-opts
+  "Create a set with options map containing:
+   - :storage  Storage implementation
+   - :comparator  Custom comparator (defaults to compare)
+   - :meta     Metadata"
+  [opts]
+  (BTSet. (leaf/Leaf. (arrays/array) nil) 0 0 (or (:comparator opts) compare)
+          (:meta opts) uninitialized-hash (:storage opts) nil))

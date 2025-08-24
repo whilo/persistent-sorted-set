@@ -4,7 +4,10 @@
    [cljs.test :as t :refer [is are deftest testing]]
    [clojure.edn :as edn]
    [clojure.string :as str]
-   [me.tonsky.persistent-sorted-set :as set :refer [Leaf Node]]))
+   [me.tonsky.persistent-sorted-set :as set]
+   [me.tonsky.persistent-sorted-set.protocols :refer [IStorage] :as impl]
+   [me.tonsky.persistent-sorted-set.leaf :refer [Leaf] :as leaf]
+   [me.tonsky.persistent-sorted-set.node :refer [Node] :as node]))
 
 (def ^:dynamic *debug* false)
 
@@ -21,7 +24,7 @@
      :accessed 0}))
 
 (defrecord Storage [*memory *disk]
-  set/IStorage
+  IStorage
   (-store [_ node opts]
     (dbg "store<" (type node) ">")
     (swap! *stats update :writes inc)

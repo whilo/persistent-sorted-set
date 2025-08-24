@@ -151,34 +151,19 @@
   ([cmp arr _len]
    (from-sorted-array cmp arr _len {}))
   ([cmp arr _len opts]
-   (let [leaves (->> arr
-                     (arr-partition-approx min-len max-len)
-                     (arr-map-inplace #(Leaf. % nil)))
-         storage (:storage opts)]
-     (loop [current-level leaves
-            shift 0]
-       (case (count current-level)
-         0 (BTSet. (Leaf. (arrays/array) nil) 0 0 cmp nil uninitialized-hash storage nil)
-         1 (BTSet. (first current-level) shift (arrays/alength arr) cmp nil uninitialized-hash storage nil)
-         (recur
-          (->> current-level
-               (arr-partition-approx min-len max-len)
-               (arr-map-inplace #(Node. (arrays/amap node-lim-key %) % nil nil)))
-          (inc shift)))))))
+   (btset/from-sorted-array cmp arr _len opts)))
 
 (defn from-sequential
   "Create a set with custom comparator and a collection of keys. Useful when you don't want to call [[clojure.core/apply]] on [[sorted-set-by]]."
   [cmp seq]
-  (let [arr (-> (into-array seq) (arrays/asort cmp) (sorted-arr-distinct cmp))]
+  (let [arr (-> (into-array seq) (arrays/asort cmp) (btset/sorted-arr-distinct cmp))]
     (from-sorted-array cmp arr)))
 
-(defn sorted-set-by
-  ([cmp] (BTSet. (Leaf. (arrays/array) nil) 0 0 cmp nil uninitialized-hash nil nil))
-  ([cmp & keys] (from-sequential cmp keys)))
+(def sorted-set-by btset/sorted-set-by)
 
 (defn sorted-set
-  ([] (sorted-set-by compare))
-  ([& keys] (from-sequential compare keys)))
+  ([] (btset/sorted-set-by compare))
+  ([& keys] (btset/from-sequential compare keys)))
 
 (defn sorted-set*
   "Create a set with options map containing:
@@ -186,8 +171,7 @@
    - :comparator  Custom comparator (defaults to compare)
    - :meta     Metadata"
   [opts]
-  (BTSet. (Leaf. (arrays/array) nil) 0 0 (or (:comparator opts) compare)
-          (:meta opts) uninitialized-hash (:storage opts) nil))
+  (btset/from-opts opts))
 
 (defn store
   "Accepts optional opts map with {:sync? true/false} (defaults to true).
@@ -207,23 +191,4 @@
   ([root-address-or-info storage]
    (restore root-address-or-info storage {}))
   ([root-address-or-info storage opts]
-   (let [;; Handle both old format (bare UUID) and new format (map with metadata)
-         address      (if (map? root-address-or-info)
-                        (:root-address root-address-or-info)
-                        root-address-or-info)
-         _ (assert (some? address))
-         meta (or (and (map? root-address-or-info) (:meta root-address-or-info))
-                  (:meta opts))
-         shift        (if (map? root-address-or-info)
-                        (:shift root-address-or-info)
-                        (:shift opts 0))
-         cnt          (if (map? root-address-or-info)
-                        (:count root-address-or-info)
-                        (:count opts 0))
-         cmp          (if (map? root-address-or-info)
-                        (or (:comparator root-address-or-info) compare)
-                        (or (:comparator opts) compare))]
-   ;(IPersistentMap meta, Comparator<Key> cmp, Address address, IStorage<Key, Address> storage, Object root, int count, Settings settings, int version)
-   ;(PersistentSortedSet. nil cmp address storage nil -1 (map->settings opts) 0)
-   #_(BTSet root shift cnt cmp meta ^:mutable _hash storage address)
-     (BTSet. nil shift cnt cmp meta uninitialized-hash storage address))))
+   (btset/restore root-address-or-info storage opts)))
