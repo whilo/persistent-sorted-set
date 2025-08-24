@@ -2,7 +2,7 @@
       "A B-tree based persistent sorted set. Supports transients, custom comparators, fast iteration, efficient slices (iterator over a part of the set) and reverse slices. Almost a drop-in replacement for [[clojure.core/sorted-set]], the only difference being this one can't store nil."
       :author "Nikita Prokopov"}
   me.tonsky.persistent-sorted-set
-  (:refer-clojure :exclude [conj disj sorted-set sorted-set-by iter contains?])
+  (:refer-clojure :exclude [conj count disj sorted-set sorted-set-by contains?])
   (:require [me.tonsky.persistent-sorted-set.arrays :as arrays]
             [me.tonsky.persistent-sorted-set.btset :as btset]))
 
@@ -36,19 +36,9 @@
 ;           idx       :: Cached idx in keys array
 ; Keys and idx are cached for fast iteration inside a leaf"
 
-(defn requires-storage-access?
-  "Fast check if a slice operation will need to access storage.
-   Returns true if any nodes in the slice path are not loaded yet."
-  [^BTSet set key-from key-to]
-  #_(when (.-storage set)
-    (let [root (.-root set)
-          shift (.-shift set)]
-      (if (== 0 shift)
-        ;; Root is a leaf - check if it needs loading
-        (node-requires-storage? root)
-        ;; Tree traversal needed - check path nodes
-        (or (node-requires-storage? root)
-            (slice-path-requires-storage? set root key-from key-to shift))))))
+(defn count
+  ([set])
+  ([set opts]))
 
 (defn contains?
   ([^BTSet set key]
@@ -56,11 +46,15 @@
   ([^BTSet set key opts]
    (btset/contains-key? set key opts)))
 
+(defn equivalent?
+  ([a b])
+  ([a b opts]))
+
 (defn conj
   "Analogue to [[clojure.core/conj]] but with comparator that overrides the one stored in set.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
-  ([^BTSet set key] (conj set key (.-comparator set) {}))
-  ([^BTSet set key cmp] (conj set key cmp {}))
+  ([^BTSet set key] (btset/conjoin set key (.-comparator set) {:sync? true}))
+  ([^BTSet set key cmp] (btset/conjoin set key cmp {:sync? true}))
   ([^BTSet set key cmp opts] (btset/conjoin set key cmp opts)))
 
 (defn disj
