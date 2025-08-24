@@ -7,7 +7,7 @@
                      bits-per-level max-safe-path max-safe-level bit-mask]]
             [me.tonsky.persistent-sorted-set.leaf :as leaf]
             [me.tonsky.persistent-sorted-set.node :as node]
-            [me.tonsky.persistent-sorted-set.protocols :refer [INode] :as impl]
+            [me.tonsky.persistent-sorted-set.protocols :refer [INode IAsyncSeq] :as impl]
             [me.tonsky.persistent-sorted-set.util
              :refer [rotate lookup-exact splice cut-n-splice
                      binary-search-l binary-search-r
@@ -206,10 +206,6 @@
         (Iter. set path till-path (keys-for set path) (path-get path 0))))))
 ;;;-----------------------------------------------------------------------------
 
-(defprotocol IAsyncSeq
-  (-afirst [this] "Returns async expression yielding first element")
-  (-arest [this] "Returns async expression yielding rest of sequence"))
-
 (deftype AsyncSeq [^BTSet set path till-path ^:mutable keys ^:mutable idx]
   IAsyncSeq
   (-afirst [this]
@@ -220,7 +216,6 @@
           (set! keys (await (keys-for set path {:sync? false})))
           (set! idx (path-get path 0)))
         (arrays/aget keys idx))))
-
   (-arest [this]
     (async
       (when (and path (path-lt path till-path))
@@ -244,12 +239,20 @@
     (-write writer (str this))))
 
 (defn async-seq
-  "Create an async sequence from a BTSet and path range"
   [set path till-path]
   (when (and path (path-lt path till-path))
     (AsyncSeq. set path till-path nil nil)))
 
-;;;-----------------------------------------------------------------------------
+(defn afirst [s]
+  ;; TODO support BTSet here, convert to AsyncSeq w/ defaults ?
+  (assert (instance? AsyncSeq s))
+  (-afirst s))
+
+(defn arest [s]
+  ;; TODO support BTSet here, convert to AsyncSeq w/ defaults ?
+  (assert (instance? AsyncSeq s))
+  (-arest s))
+
 (defn async-slice
   "Async version of slice that returns an AsyncSeq."
   [^BTSet set key-from key-to comparator]
@@ -259,7 +262,7 @@
         (async-seq set path till-path)))))
 ;;;-----------------------------------------------------------------------------
 
-(defn arr-map-inplace [f arr]
+(defn- arr-map-inplace [f arr]
   (let [len (arrays/alength arr)]
     (loop [i 0]
       (when (< i len)
@@ -267,7 +270,7 @@
         (recur (inc i))))
     arr))
 
-(defn arr-partition-approx
+(defn- arr-partition-approx
   "Splits `arr` into arrays of size between min-len and max-len,
    trying to stick to (min+max)/2"
   [min-len max-len arr]
@@ -321,16 +324,6 @@
               (recur (conj! acc e) (inc i) e))))))))
 
 (declare store-node)
-
-(defn make-node-from-storage
-  "Create a Node with addresses for lazy restoration"
-  [keys addresses]
-  (Node. keys nil (into-array addresses) nil))
-
-(defn make-leaf-from-storage
-  "Create a Leaf from stored data"
-  [keys]
-  (leaf/Leaf. keys nil))
 
 (defn- store-node
   "Store a node recursively. Returns address or channel depending on sync mode."

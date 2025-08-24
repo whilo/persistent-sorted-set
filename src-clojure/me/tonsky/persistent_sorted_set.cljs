@@ -79,6 +79,12 @@
 
 ;; Public interface
 
+(defn contains?
+  ([^BTSet set key]
+   (btset/contains-key? set key {}))
+  ([^BTSet set key opts]
+   (btset/contains-key? set key opts)))
+
 (defn conj
   "Analogue to [[clojure.core/conj]] but with comparator that overrides the one stored in set.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
@@ -130,6 +136,8 @@
   ([seq to cmp]
    (btset/-seek seq to cmp)))
 
+#!------------------------------------------------------------------------------
+
 (defn lookup-async
   ([^BTSet set key]
    (btset/lookup-key set key nil {}))
@@ -138,11 +146,49 @@
   ([^BTSet set key not-found opts]
    (btset/lookup-key set key not-found opts)))
 
-(defn contains?
-  ([^BTSet set key]
-   (btset/contains-key? set key {}))
-  ([^BTSet set key opts]
-   (btset/contains-key? set key opts)))
+(defn async-seq
+  "Create an async sequence from a BTSet and path range"
+  [set path till-path];;-------------------------------------------------------- TODO fix these param names
+  (btset/async-seq set path till-path))
+
+(defn afirst
+  [set]
+  (btset/afirst set));;--------------------------------------------------------- TODO this is AsyncSeq only
+
+(defn arest
+  [set]
+  (btset/arest set));;---------------------------------------------------------- TODO this is AsyncSeq only
+
+#!------------------------------------------------------------------------------
+
+;; me.tonsky.persistent-sorted-set.async-transducers
+
+; (defn asequence [])
+; (defn atransduce [])
+
+#!------------------------------------------------------------------------------
+
+(defn store
+  "Accepts optional opts map with {:sync? true/false} (defaults to true).
+   returns address specified by storage"
+  ([^BTSet set]
+   (store set (.-storage set) {}))
+  ([^BTSet set arg] (btset/store set arg))
+  ([^BTSet set storage opts] (btset/store set storage opts)))
+
+(defn restore
+  "Restore a set from storage given root-address-or-info and storage.
+   + First arg can be either:
+     - A root address (UUID) - requires opts with :shift and :count
+     - A map from store-set with :root-address, :shift, :count, :comparator
+   + Storage operations will use the provided opts for sync/async mode.
+   + This operation is always synchronous and does not initiate io."
+  ([root-address-or-info storage]
+   (restore root-address-or-info storage {}))
+  ([root-address-or-info storage opts]
+   (btset/restore root-address-or-info storage opts)))
+
+#!------------------------------------------------------------------------------
 
 (defn from-sorted-array
   "Fast path to create a set if you already have a sorted array of elements on your hands."
@@ -173,22 +219,3 @@
   [opts]
   (btset/from-opts opts))
 
-(defn store
-  "Accepts optional opts map with {:sync? true/false} (defaults to true).
-   returns address specified by storage"
-  ([^BTSet set]
-   (store set (.-storage set) {}))
-  ([^BTSet set arg] (btset/store set arg))
-  ([^BTSet set storage opts] (btset/store set storage opts)))
-
-(defn restore
-  "Restore a set from storage given root-address-or-info and storage.
-   + First arg can be either:
-     - A root address (UUID) - requires opts with :shift and :count
-     - A map from store-set with :root-address, :shift, :count, :comparator
-   + Storage operations will use the provided opts for sync/async mode.
-   + This operation is always synchronous and does not initiate io."
-  ([root-address-or-info storage]
-   (restore root-address-or-info storage {}))
-  ([root-address-or-info storage opts]
-   (btset/restore root-address-or-info storage opts)))

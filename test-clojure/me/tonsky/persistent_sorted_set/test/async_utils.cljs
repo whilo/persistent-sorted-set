@@ -2,24 +2,38 @@
   "Simple utilities for async testing"
   (:require [await-cps :refer [await smart-trampoline]
                        :refer-macros [async]]
-            [me.tonsky.persistent-sorted-set :as set]))
+            [me.tonsky.persistent-sorted-set :as set]
+            [me.tonsky.persistent-sorted-set.btset :as btset]
+            [me.tonsky.persistent-sorted-set.leaf :as leaf]
+            [me.tonsky.persistent-sorted-set.node :as node]
+            [me.tonsky.persistent-sorted-set.protocols :refer [IStorage]]))
+
+(defn make-node-from-storage
+  "Create a Node with addresses for lazy restoration"
+  [keys addresses]
+  (Node. keys nil (into-array addresses) nil))
+
+(defn make-leaf-from-storage
+  "Create a Leaf from stored data"
+  [keys]
+  (leaf/Leaf. keys nil))
 
 (defrecord TestSyncStorage [*store]
-  me.tonsky.persistent-sorted-set/IStorage
+  IStorage
   (-restore [this address opts]
     (if-let [{:keys [type keys addresses]} (get @*store address)]
       (case type
-        :node (set/make-node-from-storage keys (vec addresses))
-        :leaf (set/make-leaf-from-storage keys))
+        :node (make-node-from-storage keys (vec addresses))
+        :leaf (make-leaf-from-storage keys))
       (throw (ex-info "Node not found" {:address address}))))
   (-store [_ node opts]
     (let [addr (random-uuid)
           data (cond
-                 (= (type node) set/Node)
+                 (= (type node) node/Node)
                  {:type :node
                   :keys (.-keys node)
                   :addresses (when (.-addresses node) (vec (.-addresses node)))}
-                 (= (type node) set/Leaf)
+                 (= (type node) leaf/Leaf)
                  {:type :leaf
                   :keys (.-keys node)}
                  :else
@@ -30,7 +44,7 @@
   (-delete [_ addresses] (swap! *store #(apply dissoc % addresses))))
 
 (defrecord TestAsyncStorage [*store delay-ms]
-  me.tonsky.persistent-sorted-set/IStorage
+  IStorage
   (-restore [this address opts]
     ;; Always use callback style, even with zero delay
     (fn [resolve raise]
@@ -39,8 +53,8 @@
         (try
           (if-let [{:keys [type keys addresses]} (get @*store address)]
             (let [node (case type
-                         :node (set/make-node-from-storage keys (vec addresses))
-                         :leaf (set/make-leaf-from-storage keys))]
+                         :node (make-node-from-storage keys (vec addresses))
+                         :leaf (make-leaf-from-storage keys))]
               (resolve node))
             (raise (ex-info "Node not found" {:address address})))
           (catch :default e
@@ -53,9 +67,9 @@
                 (if-let [{:keys [type keys addresses]} (get @*store address)]
                   (let [node (case type
                                :node
-                               (set/make-node-from-storage keys (vec addresses))
+                               (make-node-from-storage keys (vec addresses))
                                :leaf
-                               (set/make-leaf-from-storage keys))]
+                               (make-leaf-from-storage keys))]
                     (resolve node))
                   (raise (ex-info "Node not found" {:address address})))
                 (catch :default e
@@ -69,11 +83,11 @@
         (try
           (let [addr (random-uuid)
                 data (cond
-                       (= (type node) set/Node)
+                       (= (type node) node/Node)
                        {:type :node
                         :keys (.-keys node)
                         :addresses (when (.-addresses node) (vec (.-addresses node)))}
-                       (= (type node) set/Leaf)
+                       (= (type node) leaf/Leaf)
                        {:type :leaf
                         :keys (.-keys node)}
                        :else
@@ -91,11 +105,11 @@
               (try
                 (let [addr (random-uuid)
                       data (cond
-                             (= (type node) set/Node)
+                             (= (type node) node/Node)
                              {:type :node
                               :keys (.-keys node)
                               :addresses (when (.-addresses node) (vec (.-addresses node)))}
-                             (= (type node) set/Leaf)
+                             (= (type node) leaf/Leaf)
                              {:type :leaf
                               :keys (.-keys node)}
                              :else

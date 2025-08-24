@@ -13,9 +13,9 @@
           result []
           count 0]
      (if (and s (< count 20))  ; Safety limit
-       (let [v (await (set/-afirst s))]
+       (let [v (await (set/afirst s))]
          (if (some? v)  ; Use some? to handle false/nil correctly
-           (let [next-s (await (set/-arest s))]
+           (let [next-s (await (set/arest s))]
              (recur next-s (conj result v) (inc count)))
            result))
        result))))

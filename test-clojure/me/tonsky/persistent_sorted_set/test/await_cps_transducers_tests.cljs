@@ -12,12 +12,12 @@
      (let [rf (xform rf)]
        (loop [acc init, s async-seq]
          (if s
-           (let [v (await (set/-afirst s))]
+           (let [v (await (set/afirst s))]
              (if (some? v)
                (let [acc' (rf acc v)]
                  (if (reduced? acc')
                    @acc'
-                   (recur acc' (await (set/-arest s)))))
+                   (recur acc' (await (set/arest s)))))
                (rf acc)))
            (rf acc)))))))
 

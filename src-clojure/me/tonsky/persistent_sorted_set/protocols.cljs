@@ -9,6 +9,10 @@
   (node-conj          [_ cmp key storage opts])
   (node-disj          [_ cmp key root? left right storage opts]))
 
+(defprotocol IAsyncSeq
+  (-afirst [this] "Returns async expression yielding first element")
+  (-arest [this] "Returns async expression yielding rest of sequence"))
+
 (defprotocol IStorage
   (-store [this node opts])
   (-restore [this address opts])

@@ -5,6 +5,9 @@
    [await-cps :refer [await run-async] :refer-macros [async]]
    [clojure.string :as string]
    [me.tonsky.persistent-sorted-set :as set]
+   [me.tonsky.persistent-sorted-set.btset :as btset]
+   [me.tonsky.persistent-sorted-set.leaf :as leaf]
+   [me.tonsky.persistent-sorted-set.node :as node]
    [me.tonsky.persistent-sorted-set.test.async-utils :as utils]))
 
 ;; Benchmark utilities
@@ -118,8 +121,8 @@
          async-set (await (utils/async-build-set 1000))
          warmup-runs 10000
          test-runs 5000]
-     (assert (instance? set/BTSet sync-set))
-     (assert (instance? set/BTSet async-set))
+     (assert (instance? btset/BTSet sync-set))
+     (assert (instance? btset/BTSet async-set))
      (testing "Benchmark: conj single element"
        (let [sync-conj (run-benchmark
                         "conj"
@@ -147,7 +150,7 @@
                             warmup-runs test-runs)
              async-contains (await (run-async-benchmark
                                     "contains?"
-                                    (fn [] (async (await (set/contains-async? async-set 50))))
+                                    (fn [] (async (await (set/contains? async-set 50 {:sync? false}))))
                                     warmup-runs test-runs))]
          (print-comparison (format-comparison sync-contains async-contains))))
      (testing "Benchmark: disj single element"
@@ -221,8 +224,8 @@
          async-set (await (utils/async-build-set 1000))
          warmup-runs 500
          iteration-runs 2000]
-     (assert (instance? set/BTSet sync-set))
-     (assert (instance? set/BTSet async-set))
+     (assert (instance? btset/BTSet sync-set))
+     (assert (instance? btset/BTSet async-set))
      (testing "Benchmark: Full iteration"
        (let [sync-iter (run-benchmark
                         "Sync full iteration"
@@ -235,9 +238,9 @@
                                           (loop [s async-seq
                                                  count 0]
                                             (if s
-                                              (let [v (await (set/-afirst s))]
+                                              (let [v (await (set/afirst s))]
                                                 (if v
-                                                  (recur (await (set/-arest s)) (inc count))
+                                                  (recur (await (set/arest s)) (inc count))
                                                   count))
                                               count)))))
                                 warmup-runs iteration-runs))]
@@ -254,9 +257,9 @@
                                            (loop [s async-seq
                                                   count 0]
                                              (if s
-                                               (let [v (await (set/-afirst s))]
+                                               (let [v (await (set/afirst s))]
                                                  (if v
-                                                   (recur (await (set/-arest s)) (inc count))
+                                                   (recur (await (set/arest s)) (inc count))
                                                    count))
                                                count)))))
                                  warmup-runs iteration-runs))]

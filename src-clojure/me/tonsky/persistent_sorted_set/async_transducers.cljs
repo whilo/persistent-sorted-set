@@ -1,12 +1,8 @@
-;; Async transducer support for lazy sequences
 (ns me.tonsky.persistent-sorted-set.async-transducers
-  (:require
-    [me.tonsky.persistent-sorted-set :as set]
-    [await-cps :refer [await]])
-  (:require-macros
-    [await-cps :refer [async]]))
+  (:require [await-cps :refer [await] :refer-macros [async]]
+            [me.tonsky.persistent-sorted-set :as set]
+            [me.tonsky.persistent-sorted-set.protocols :refer [IAsyncSeq]]))
 
-;; Helper for eagerly consuming an async sequence with a transducer
 (defn async-transduce
   "Transduce over an AsyncSeq eagerly, returning a Promise of the final result."
   [xform f init async-seq]
@@ -15,25 +11,21 @@
       (loop [result init
              seq async-seq]
         (if seq
-          (let [v (await (set/-afirst seq))]
+          (let [v (await (set/afirst seq))]
             (if (some? v)
               (let [result' (rf result v)]
                 (if (reduced? result')
-                  (rf (unreduced result'))  ; Call completion on unreduced value
-                  (recur result' (await (set/-arest seq)))))
-              (rf result)))  ; Call completion when exhausted
-          (rf result))))))  ; Call completion when no seq
+                  (rf (unreduced result'))
+                  (recur result' (await (set/arest seq)))))
+              (rf result)))
+          (rf result))))))
 
-;; Helper for eagerly collecting into a collection
 (defn async-into
-  "Async version of into - eagerly consumes the AsyncSeq with a transducer.
-   Returns a Promise that resolves to the final collection."
   ([to xform async-seq]
    (async-transduce xform conj to async-seq))
   ([to async-seq]
    (async-transduce identity conj to async-seq)))
 
-;; Lazy transduced async sequence implementation
 (defprotocol ITransducerState
   "Protocol for managing shared transducer state"
   (-ensure-buffer! [this idx] "Ensure buffer has element at idx"))
@@ -55,12 +47,12 @@
               true
               ;; Need to pull from source
               (if-let [source @source-ref]
-                (let [v (await (set/-afirst source))]
+                (let [v (await (set/afirst source))]
                   (if v
                     ;; Feed value through transducer
                     (let [result (xf nil v)
                           ;; Advance source
-                          next-source (await (set/-arest source))
+                          next-source (await (set/arest source))
                           _ (vreset! source-ref next-source)]
                       (if (reduced? result)
                         ;; Reduced - complete and check buffer
@@ -93,7 +85,7 @@
                   false)))))))))
 
 (deftype TransducedAsyncSeq [state idx]
-  set/IAsyncSeq
+  IAsyncSeq
   (-afirst [_]
     (async
       ;; Ensure buffer has element at idx
