@@ -7,7 +7,7 @@
                      bits-per-level max-safe-path max-safe-level bit-mask]]
             [me.tonsky.persistent-sorted-set.leaf :as leaf :refer [Leaf]]
             [me.tonsky.persistent-sorted-set.node :as node :refer [Node]]
-            [me.tonsky.persistent-sorted-set.protocols :refer [INode IAsyncSeq] :as impl]
+            [me.tonsky.persistent-sorted-set.protocols :refer [IAsyncSeq INode IStorage] :as impl]
             [me.tonsky.persistent-sorted-set.util
              :refer [rotate lookup-exact splice cut-n-splice
                      binary-search-l binary-search-r
@@ -62,7 +62,17 @@
 
 #!------------------------------------------------------------------------------
 
-(defn conjoin
+(defn $count
+  [^BTSet set key opts]
+  (throw (js/Error. "unimplemented")))
+
+(defn $contains?
+  [^BTSet set key opts]
+  ;; TODO sync
+  (async
+   (some? (await (impl/node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false})))))
+
+(defn $conjoin
   [^BTSet set key cmp {:keys [sync?] :or {sync? true} :as opts}]
   (async+sync sync?
     (async
@@ -85,7 +95,7 @@
                 (inc (.-shift set))
                 (inc (.-cnt set))))))))
 
-(defn disjoin
+(defn $disjoin
   [^BTSet set key cmp {:keys [sync?] :or {sync? true} :as opts}]
   (async+sync sync?
     (async
@@ -108,13 +118,13 @@
                     (.-shift set)
                     (dec (.-cnt set))))))))))
 
-(defn store
+(defn $store
   ([^BTSet set arg]
    (if (implements? IStorage arg)
      (do
        (set! (.-storage set) arg)
-       (store set arg {}))
-     (store set (.-storage set) arg)))
+       ($store set arg {:sync? true}))
+     ($store set (.-storage set) arg)))
   ([^BTSet set storage {:keys [sync?] :or {sync? true} :as opts}]
    (assert (instance? BTSet set))
    (assert (implements? IStorage storage))
@@ -125,18 +135,14 @@
           (set! (.-address set) (await (store-node (.-root set) storage opts))))
         (.-address set))))))
 
-(defn contains-key?
-  [^BTSet set key opts]
-  ;; TODO sync
-  (async
-   (some? (await (impl/node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false})))))
-
-(defn lookup-key
+(defn $lookup
   [^BTSet set key not-found opts]
   ;; TODO sync
   (async
    (or (await (impl/node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false}))
        not-found)))
+
+#!------------------------------------------------------------------------------
 
 (defn restore
   [root-address-or-info storage opts]
@@ -159,14 +165,6 @@
     (BTSet. nil shift cnt cmp meta uninitialized-hash storage address)))
 
 #!------------------------------------------------------------------------------
-
-(defn- arr-map-inplace [f arr]
-  (let [len (arrays/alength arr)]
-    (loop [i 0]
-      (when (< i len)
-        (arrays/aset arr i (f (arrays/aget arr i)))
-        (recur (inc i))))
-    arr))
 
 (defn- arr-partition-approx
   "Splits `arr` into arrays of size between min-len and max-len,
@@ -930,14 +928,16 @@
   (-hash [this] (caching-hash this hash-unordered-coll _hash))
 
   ICollection
-  (-conj [this key] (conjoin this key comparator {:sync? true}))
+  (-conj [this key] ($conjoin this key comparator {:sync? true}))
 
   ISet
-  (-disjoin [this key] (disj this key comparator {}))
+  (-disjoin [this key] ($disjoin this key comparator {:sync? true}))
 
   ILookup
-  (-lookup [this k] (impl/node-lookup root comparator k storage {:sync? true}))
-  (-lookup [this k not-found] (or (impl/node-lookup root comparator k storage {:sync? true}) not-found))
+  (-lookup [this k]
+    (impl/node-lookup root comparator k storage {:sync? true}))
+  (-lookup [this k not-found]
+   (or (impl/node-lookup root comparator k storage {:sync? true}) not-found))
 
   ISeqable
   (-seq [this] (btset-iter this))
@@ -962,11 +962,11 @@
   (-as-transient [this] this)
 
   ITransientCollection
-  (-conj! [this key] (conjoin this key comparator {:sync? true}))
+  (-conj! [this key] ($conjoin this key comparator {:sync? true}))
   (-persistent! [this] this)
 
   ITransientSet
-  (-disjoin! [this key] (disjoin this key comparator {}))
+  (-disjoin! [this key] ($disjoin this key comparator {:sync? true}))
 
   IFn
   (-invoke [this k] (-lookup this k))
@@ -978,6 +978,14 @@
 
 #!------------------------------------------------------------------------------
 #! Constructors
+
+(defn- arr-map-inplace [f arr]
+  (let [len (arrays/alength arr)]
+    (loop [i 0]
+      (when (< i len)
+        (arrays/aset arr i (f (arrays/aget arr i)))
+        (recur (inc i))))
+    arr))
 
 (defn ^BTSet from-sorted-array
   [cmp arr _len opts]

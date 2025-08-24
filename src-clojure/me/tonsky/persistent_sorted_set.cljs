@@ -42,9 +42,9 @@
 
 (defn contains?
   ([^BTSet set key]
-   (btset/contains-key? set key {}))
+   (btset/$contains? set key {:sync? true}))
   ([^BTSet set key opts]
-   (btset/contains-key? set key opts)))
+   (btset/$contains? set key opts)))
 
 (defn equivalent?
   ([a b])
@@ -53,16 +53,16 @@
 (defn conj
   "Analogue to [[clojure.core/conj]] but with comparator that overrides the one stored in set.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
-  ([^BTSet set key] (btset/conjoin set key (.-comparator set) {:sync? true}))
-  ([^BTSet set key cmp] (btset/conjoin set key cmp {:sync? true}))
-  ([^BTSet set key cmp opts] (btset/conjoin set key cmp opts)))
+  ([^BTSet set key] (btset/$conjoin set key (.-comparator set) {:sync? true}))
+  ([^BTSet set key cmp] (btset/$conjoin set key cmp {:sync? true}))
+  ([^BTSet set key cmp opts] (btset/$conjoin set key cmp opts)))
 
 (defn disj
   "Analogue to [[clojure.core/disj]] with comparator that overrides the one stored in set.
    Accepts optional opts map with {:sync? true/false} (defaults to true)."
-  ([^BTSet set key] (disj set key (.-comparator set) {}))
-  ([^BTSet set key cmp] (disj set key cmp {}))
-  ([^BTSet set key cmp opts] (btset/disjoin set key cmp opts)))
+  ([^BTSet set key] (btset/$disjoin set key (.-comparator set) {:sync? true}))
+  ([^BTSet set key cmp] (btset/$disjoin set key cmp {:sync? true}))
+  ([^BTSet set key cmp opts] (btset/$disjoin set key cmp opts)))
 
 (defn slice
   "An iterator for part of the set with provided boundaries.
@@ -103,13 +103,14 @@
 
 #!------------------------------------------------------------------------------
 
-(defn lookup-async
+
+(defn lookup-async ;;-----------------------------------------------------------TODO kill me
   ([^BTSet set key]
-   (btset/lookup-key set key nil {}))
+   (btset/$lookup set key nil {:sync? false}))
   ([^BTSet set key not-found]
-   (btset/lookup-key set key not-found {}))
+   (btset/$lookup set key not-found {:sync? false}))
   ([^BTSet set key not-found opts]
-   (btset/lookup-key set key not-found opts)))
+   (btset/$lookup set key not-found (assoc opts :sync? false))))
 
 (defn async-seq
   "Create an async sequence from a BTSet and path range"
@@ -136,10 +137,9 @@
 (defn store
   "Accepts optional opts map with {:sync? true/false} (defaults to true).
    returns address specified by storage"
-  ([^BTSet set]
-   (store set (.-storage set) {}))
-  ([^BTSet set arg] (btset/store set arg))
-  ([^BTSet set storage opts] (btset/store set storage opts)))
+  ([^BTSet set] (btset/$store set (.-storage set) {:sync? true}))
+  ([^BTSet set arg] (btset/$store set arg {:sync? true}))
+  ([^BTSet set storage opts] (btset/$store set storage opts)))
 
 (defn restore
   "Restore a set from storage given root-address-or-info and storage.
@@ -149,7 +149,7 @@
    + Storage operations will use the provided opts for sync/async mode.
    + This operation is always synchronous and does not initiate io."
   ([root-address-or-info storage]
-   (restore root-address-or-info storage {}))
+   (btset/restore root-address-or-info storage {}))
   ([root-address-or-info storage opts]
    (btset/restore root-address-or-info storage opts)))
 

@@ -9,7 +9,7 @@
    [me.tonsky.persistent-sorted-set.leaf :refer [Leaf] :as leaf]
    [me.tonsky.persistent-sorted-set.node :refer [Node] :as node]))
 
-(def ^:dynamic *debug* false)
+(def ^:dynamic *debug* true)
 
 (defn dbg [& args]
   (when *debug*
@@ -69,6 +69,9 @@
 
 (defn node? [o] (instance? Node o))
 
+
+;; TODO ILookup needs ensure-root
+
 (deftest ascending-insert-test
   (and
    (testing "one item"
@@ -86,15 +89,16 @@
            (is (= address (.-address original)))
            (is (= 1 (:writes @*stats)))
            (is (= 0 (:reads @*stats)))
-           (let [restored (set/restore address storage {:count 1})]             ;<-- XXX
-             (and
-              (is (set? original))
-              (is (set? restored))
-              (is (= 1 (count original)))
-              (is (= 1 (count restored)))
-              (is (= restored original))
-              (is (instance? Leaf (.-root restored)))
-              (is (= 1 (:reads @*stats))))))))))
+           (testing "restoring one item"
+             (let [restored (set/restore address storage {:count 1})]             ;<-- XXX
+               (and
+                (is (set? original))
+                (is (set? restored))
+                (is (= 1 (count original)) "original has 1 item")
+                (is (= 1 (count restored)) "restored has 1 item")
+                (is (= restored original)  "restored is equiv")
+                (is (instance? Leaf (.-root restored)))
+                (is (= 1 (:reads @*stats)))))))))))
    (testing "one full leaf"
      (let [_(reset! *stats {:reads 0 :writes 0 :accessed 0})
            original (into (set/sorted-set* {}) (range 0 32))]
