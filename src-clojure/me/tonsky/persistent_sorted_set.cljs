@@ -2,7 +2,7 @@
       "A B-tree based persistent sorted set. Supports transients, custom comparators, fast iteration, efficient slices (iterator over a part of the set) and reverse slices. Almost a drop-in replacement for [[clojure.core/sorted-set]], the only difference being this one can't store nil."
       :author "Nikita Prokopov"}
   me.tonsky.persistent-sorted-set
-  (:refer-clojure :exclude [conj disj sorted-set sorted-set-by iter])
+  (:refer-clojure :exclude [conj disj sorted-set sorted-set-by iter contains?])
   (:require-macros [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])
   (:require [me.tonsky.persistent-sorted-set.arrays :as arrays]
             [me.tonsky.persistent-sorted-set.btset :as btset]
@@ -131,21 +131,18 @@
    (btset/-seek seq to cmp)))
 
 (defn lookup-async
-  "Async version of lookup that works with async storage.
-   Returns a channel that will contain the value if found, or nil/not-found."
   ([^BTSet set key]
-   (lookup-async set key nil))
+   (btset/lookup-key set key nil {}))
   ([^BTSet set key not-found]
-   (async
-     (or (await (node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false}))
-         not-found))))
+   (btset/lookup-key set key not-found {}))
+  ([^BTSet set key not-found opts]
+   (btset/lookup-key set key not-found opts)))
 
-(defn contains-async?
-  "Async version of contains? that works with async storage.
-   Returns a channel that will contain true if key exists, false otherwise."
-  [^BTSet set key]
-  (async
-    (some? (await (node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false})))))
+(defn contains?
+  ([^BTSet set key]
+   (btset/contains-key? set key {}))
+  ([^BTSet set key opts]
+   (btset/contains-key? set key opts)))
 
 (defn from-sorted-array
   "Fast path to create a set if you already have a sorted array of elements on your hands."
@@ -197,21 +194,8 @@
    returns address specified by storage"
   ([^BTSet set]
    (store set (.-storage set) {}))
-  ([^BTSet set arg]
-   (if (implements? IStorage arg)
-     (do
-       (set! (.-storage set) arg)
-       (store set arg {}))
-     (store set (.-storage set) arg)))
-  ([^BTSet set storage {:keys [sync?] :or {sync? true} :as opts}]
-   (assert (instance? BTSet set))
-   (assert (implements? IStorage storage))
-   (async+sync sync?
-     (async
-      (do
-        (when (nil? (.-address set))
-          (set! (.-address set) (await (store-node (.-root set) storage opts))))
-        (.-address set))))))
+  ([^BTSet set arg] (btset/store set arg))
+  ([^BTSet set storage opts] (btset/store set storage opts)))
 
 (defn restore
   "Restore a set from storage given root-address-or-info and storage.

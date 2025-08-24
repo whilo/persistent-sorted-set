@@ -35,6 +35,9 @@
           (set! (.-root set) (await (-restore (.-storage set) (.-address set) opts)))))
       (.-root set)))))
 
+
+#!------------------------------------------------------------------------------
+
 (defn conjoin
   [^BTSet set key cmp {:keys [sync?] :or {sync? true} :as opts}]
   (async+sync sync?
@@ -82,10 +85,38 @@
                               (.-shift set)
                               (dec (.-cnt set))))))))))
 
+(defn store
+  ([^BTSet set arg]
+   (if (implements? IStorage arg)
+     (do
+       (set! (.-storage set) arg)
+       (store set arg {}))
+     (store set (.-storage set) arg)))
+  ([^BTSet set storage {:keys [sync?] :or {sync? true} :as opts}]
+   (assert (instance? BTSet set))
+   (assert (implements? IStorage storage))
+   (async+sync sync?
+               (async
+                (do
+                  (when (nil? (.-address set))
+                    (set! (.-address set) (await (store-node (.-root set) storage opts))))
+                  (.-address set))))))
+
+(defn contains-key?
+  [^BTSet set key opts]
+  ;; TODO sync
+  (async
+   (some? (await (impl/node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false})))))
+
+(defn lookup-key
+  [^BTSet set key not-found opts]
+  ;; TODO sync
+  (async
+   (or (await (impl/node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false}))
+       not-found)))
 
 
-
-
+#!------------------------------------------------------------------------------
 
 
 
