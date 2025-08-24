@@ -74,25 +74,30 @@
 (defn $contains?
   [^BTSet set key {:keys [sync?] :or {sync? true} :as opts}]
   (async+sync sync?
-   (async
-    (some? (await (impl/node-lookup (.-root set) (.-comparator set) key (.-storage set) opts))))))
+    (async
+      (let [root (await (ensure-root set opts))]
+        (await (impl/node-contains? root (.-storage set) key (.-comparator set) opts))))))
 
 (defn $equivalent?
   [^BTSet set other {:keys [sync?] :or {sync? true} :as opts}]
-  (async+sync sync?
-    (async
-     (if (instance? BTSet other)
-       ()
-       (if (set? other)
-         (let [n (await ($count set opts))]
-           (and (= n (cljs.core/count other))
-                ))
-         false))))
-  ; (and
-  ;  (set? other)
-  ;  (== cnt (count other))
-  ;  (every? #(contains? this %) other))
-  )
+  (if sync?
+    (if-not (set? other)
+      false
+      (and (= (count set) (count other))
+           (every? #($contains? set % opts) other)))
+    (if-not (set? other)
+      (async false)
+      (if (instance? BTSet other)
+        (throw (Exception. "unimplemented btset to btset equivalent?"))
+        (and (= (await ($count set opts))
+                (count other))
+             (loop [items (seq other)]
+               (let [item (first item)]
+                 (if (nil? item)
+                   true
+                   (if-not ($await ($contains? set item opts))
+                     false
+                     (recur (rest items)))))))))))
 
 (defn $conjoin
   [^BTSet set key cmp {:keys [sync?] :or {sync? true} :as opts}]
@@ -922,9 +927,9 @@
 
   ILookup
   (-lookup [this k]
-    (impl/node-lookup root comparator k storage {:sync? true}))
+    (impl/node-lookup root comparator k storage {:sync? true}));;---------------TODO ensure-root?
   (-lookup [this k not-found]
-   (or (impl/node-lookup root comparator k storage {:sync? true}) not-found))
+    (or (impl/node-lookup root comparator k storage {:sync? true}) not-found))
 
   ISeqable
   (-seq [this] (iter this))

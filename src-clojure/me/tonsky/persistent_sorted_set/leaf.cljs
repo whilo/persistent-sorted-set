@@ -1,12 +1,13 @@
 (ns me.tonsky.persistent-sorted-set.leaf
   (:require-macros [me.tonsky.persistent-sorted-set.macros :refer [async+sync]])
-  (:require [me.tonsky.persistent-sorted-set.arrays :as arrays]
+  (:require [await-cps :refer [await] :refer-macros [async]]
+            [goog.array :as garr]
+            [me.tonsky.persistent-sorted-set.arrays :as arrays]
             [me.tonsky.persistent-sorted-set.constants :refer [max-len]]
             [me.tonsky.persistent-sorted-set.protocols :refer [INode]]
             [me.tonsky.persistent-sorted-set.util
              :refer [rotate lookup-exact splice cut-n-splice binary-search-l
-                     return-array merge-n-split]]
-            [await-cps :refer [await] :refer-macros [async]]))
+                     return-array merge-n-split]]))
 
 (deftype Leaf [keys ^:mutable _hash]
   Object
@@ -23,6 +24,13 @@
                       (let [ks (merge-n-split keys (.-keys next))]
                         (return-array (Leaf. (arrays/aget ks 0) nil)
                                       (Leaf. (arrays/aget ks 1) nil))))
+
+  (node-contains? [this _ key cmp opts]
+    (let [{:keys [sync?] :or {sync? true}} opts]
+      (let [res (<= 0 ^number (garr/binarySearch (.-keys this) cmp))]
+        (if sync?
+          res
+          (async res)))))
 
   (node-count [this _storage _opts]
     (let [{:keys [sync?] :or {sync? true}} opts]
