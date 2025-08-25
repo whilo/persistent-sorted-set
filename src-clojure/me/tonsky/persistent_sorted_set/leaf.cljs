@@ -27,12 +27,12 @@
 
   (node-contains? [this _ key cmp opts]
     (let [{:keys [sync?] :or {sync? true}} opts]
-      (let [res (<= 0 ^number (garr/binarySearch (.-keys this) cmp))]
+      (let [res (<= 0 ^number (garr/binarySearch keys key cmp))]
         (if sync?
           res
           (async res)))))
 
-  (node-count [this _storage _opts]
+  (node-count [_ _storage opts]
     (let [{:keys [sync?] :or {sync? true}} opts]
       (if sync?
         (alength keys)

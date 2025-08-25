@@ -27,7 +27,6 @@
    (ensure-root set {}))
   ([^BTSet set {:keys [sync?] :or {sync? true} :as opts}]
    (assert (or (some? (.-address set)) (some? (.-root set))))
-   (assert (some? (.-storage set)))
    (async+sync sync?
     (async
       (do
@@ -88,14 +87,14 @@
     (if-not (set? other)
       (async false)
       (if (instance? BTSet other)
-        (throw (Exception. "unimplemented btset to btset equivalent?"))
+        (throw (js/Error. "unimplemented btset to btset equivalent?"))
         (and (= (await ($count set opts))
                 (count other))
              (loop [items (seq other)]
-               (let [item (first item)]
+               (let [item (first items)]
                  (if (nil? item)
                    true
-                   (if-not ($await ($contains? set item opts))
+                   (if-not (await ($contains? set item opts))
                      false
                      (recur (rest items)))))))))))
 

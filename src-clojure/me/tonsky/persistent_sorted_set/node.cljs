@@ -50,24 +50,26 @@
 
 (defn- $child-storage
   [^Node node storage idx {:keys [sync?] :or {sync? true} :as opts}]
-  (assert (and (<= 0 idx) (< idx (alength (.-keys node)))))
-  (assert (or (and (some? (.-children node)) (some? (aget (.-children node) idx)))
-              (and (some? (.-addresses node)) (some? (aget (.-addresses node) idx)))))
+  (assert (and (<= 0 idx)
+               (< idx (alength (.-keys node)))))
+  (assert (or (and (some? (.-children node))
+                   (some? (aget (.-children node) idx)))
+              (and (some? (.-addresses node))
+                   (some? (aget (.-addresses node) idx)))))
   (async+sync sync?
     (async
-     (let [child (when (some? (.-children node))
-                   (aget (.-children node) idx))]
-       (if (nil? child)
-         (let [addr (aget (.-address node) idx)
-               _(assert (some? addr))
-               child (await (impl/restore storage addr opts))]
-           (aset (ensure-children) idx child)
-           child)
-         (do
-           (when-some [addr (and (some? (.-addresses node))
-                                 (aget (.-addresses node) idx))]
-             (impl/accessed storage addr))
-           child))))))
+      (if-let [child (and (some? (.-children node))
+                          (aget (.-children node) idx))]
+        (do
+          (when-some [addr (and (some? (.-addresses node))
+                                (aget (.-addresses node) idx))]
+            (impl/accessed storage addr))
+          child)
+        (let [addr (aget (.-addresses node) idx)
+              _(assert (some? addr) "expected address to restore child")
+              child (await (impl/restore storage addr opts))]
+          (aset (ensure-children node) idx child)
+          child)))))
 
 (defn- $count
   [^Node node storage {:keys [sync?] :or {sync? true} :as opts}]
@@ -81,10 +83,18 @@
 
 (defn- $contains?
   [^Node node storage key cmp {:keys [sync?] :or {sync? true} :as opts}]
-  (let [idx ]))
-
-
-
+  (let [idx (garr/binarySearch (.-keys node) key cmp)]
+    (async+sync sync?
+      (async
+        (if (<= 0 idx)
+          true
+          (let [ins (dec (- idx))]
+            (if (== ins (alength (.-keys node)))
+              false
+              (do
+                (assert (and (<= 0 ins) (< ins (alength (.-keys node)))))
+                (let [child (await ($child-storage node storage ins opts))]
+                  (await (impl/node-contains? child storage key cmp)))))))))))
 
 (deftype Node [keys ^:mutable children ^:mutable addresses ^:mutable _hash]
   Object

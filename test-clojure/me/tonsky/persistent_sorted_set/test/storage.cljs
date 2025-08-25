@@ -9,7 +9,7 @@
    [me.tonsky.persistent-sorted-set.leaf :refer [Leaf] :as leaf]
    [me.tonsky.persistent-sorted-set.node :refer [Node] :as node]))
 
-(def ^:dynamic *debug* true)
+(def ^:dynamic *debug* false)
 
 (defn dbg [& args]
   (when *debug*
@@ -159,11 +159,11 @@
         (is (= 0 (:writes @*stats)))
         (is (= 0 (:reads @*stats)))
         (is (instance? Node (.-root original)))
-        (let [children (children (.-root original))
+        (let [cs (children (.-root original))
               root-keys (ks (.-root original))]
           (and
-           (is (= 3 (count children)))
-           (is (every? node? children))
+           (is (= 3 (count cs)))
+           (is (every? node? cs))
            (is (= [255 511 1023] root-keys))
            (is (nil? (.-address original)))
            (let [storage (storage)
@@ -174,20 +174,19 @@
               (is (= 67 (:writes @*stats)))
               (is (= 0 (:reads @*stats)))
               (is (empty? (deref (:*memory storage))))
-              (binding [*debug* true]
-                (let [restored (set/restore address storage {:count 1024})]     ;<--- XXX
-                  #_(and
-                   (is (empty? (deref (:*memory storage))))
-                   (is (= 0 (:reads @*stats)))
-                   (is (= restored original))
-                   (is (= 67 (:reads @*stats)))
-                   (let [children (children (.-root restored))
-                         root-keys (ks (.-root original))]
-                     (and
-                      (is (= 3 (count children)))
-                      (is (= 3 (count root-keys)))
-                      (is (every? node? children))
-                      (is (= [255 511 1023] root-keys))))))))))))))))
+              (let [restored (set/restore address storage {:count 1024})]     ;<--- XXX
+                (and
+                 (is (empty? (deref (:*memory storage))))
+                 (is (= 0 (:reads @*stats)))
+                 (is (= restored original))
+                 (is (= 67 (:reads @*stats)))
+                 (let [cs (children (.-root restored))
+                       root-keys (ks (.-root original))]
+                   (and
+                    (is (= 3 (count cs)))
+                    (is (= 3 (count root-keys)))
+                    (is (every? node? cs))
+                    (is (= [255 511 1023] root-keys)))))))))))))))
 
 ;;; uses ensure-root
 ;; slice
