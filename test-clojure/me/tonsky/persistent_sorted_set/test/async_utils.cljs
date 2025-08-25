@@ -46,7 +46,6 @@
 (defrecord TestAsyncStorage [*store delay-ms]
   IStorage
   (restore [this address opts]
-    ;; Always use callback style, even with zero delay
     (fn [resolve raise]
       (if (zero? delay-ms)
         ;; Fast path: no delay = immediate callback
