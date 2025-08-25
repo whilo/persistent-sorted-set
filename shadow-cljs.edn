@@ -9,6 +9,4 @@
                       :static-fns true
                       :fn-invoke-direct true
                       :elide-asserts true
-                      :optimizations :advanced}}
-
-}}
+                      :optimizations :advanced}}}}

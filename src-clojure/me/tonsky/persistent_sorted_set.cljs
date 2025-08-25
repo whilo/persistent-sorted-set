@@ -135,8 +135,8 @@
 (defn store
   "Accepts optional opts map with {:sync? true/false} (defaults to true).
    returns address specified by storage"
-  ([^BTSet set] (btset/$store set (.-storage set) {:sync? true}))
-  ([^BTSet set arg] (btset/$store set arg {:sync? true}))
+  ([^BTSet set] (btset/$store set {:sync? true}))
+  ([^BTSet set arg] (btset/$store set arg))
   ([^BTSet set storage opts] (btset/$store set storage opts)))
 
 (defn restore

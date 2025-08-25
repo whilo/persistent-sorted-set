@@ -22,21 +22,18 @@
   ([^BTSet set root shift cnt cmp]
    (BTSet. root shift cnt cmp (.-meta set) uninitialized-hash (.-storage set) (.-address set))))
 
-(defn- ensure-root
-  ([^BTSet set]
-   (ensure-root set {}))
-  ([^BTSet set {:keys [sync?] :or {sync? true} :as opts}]
-   (assert (or (some? (.-address set)) (some? (.-root set))))
-   (async+sync sync?
+(defn- $$ensure-root
+  [^BTSet set {:keys [sync?] :or {sync? true} :as opts}]
+  (assert (or (some? (.-address set)) (some? (.-root set))))
+  (async+sync sync?
     (async
-      (do
-        (when (and (nil? (.-root set)) (some? (.-address set)))
-          (set! (.-root set) (await (impl/restore (.-storage set) (.-address set) opts)))))
-      (.-root set)))))
+     (do
+       (when (and (nil? (.-root set)) (some? (.-address set)))
+         (set! (.-root set) (await (impl/restore (.-storage set) (.-address set) opts)))))
+     (.-root set))))
 
 (defn- store-node
-  "Store a node recursively. Returns address or channel depending on sync mode."
-  [node storage  {:keys [sync?] :or {sync? true} :as opts}]
+  [node storage {:keys [sync?] :or {sync? true} :as opts}]
   (async+sync sync?
     (cond
       (instance? Leaf node)
@@ -46,12 +43,10 @@
       (async
        (let [children (.-children node)
              addresses (arrays/make-array (arrays/alength children))]
-         ;; store children first
          (dotimes [i (arrays/alength children)]
            (let [child (arrays/aget children i)
                  addr (await (store-node child storage opts))]
              (arrays/aset addresses i addr)))
-         ;; Then store this node with addresses
          (let [node-with-addresses (Node. (.-keys node) nil addresses nil)
                final-addr (await (impl/store storage node-with-addresses opts))]
            final-addr)))
@@ -66,7 +61,7 @@
   (async+sync sync?
     (do
       (when (neg? (.-cnt set))
-        (let [root (await (ensure-root set opts))]
+        (let [root (await ($$ensure-root set opts))]
           (set! (.-cnt set) (await (impl/node-count root (.-storage set) opts)))))
       (.-cnt set))))
 
@@ -74,7 +69,7 @@
   [^BTSet set key {:keys [sync?] :or {sync? true} :as opts}]
   (async+sync sync?
     (async
-      (let [root (await (ensure-root set opts))]
+      (let [root (await ($$ensure-root set opts))]
         (await (impl/node-contains? root (.-storage set) key (.-comparator set) opts))))))
 
 (defn $equivalent?
@@ -162,11 +157,12 @@
         (.-address set))))))
 
 (defn $lookup
-  [^BTSet set key not-found opts]
-  ;; TODO sync
-  (async
-   (or (await (impl/node-lookup (.-root set) (.-comparator set) key (.-storage set) {:sync? false}))
-       not-found)))
+  [^BTSet set key not-found {:keys [sync?] :or {sync? true} :as opts}]
+  (async+sync sync?
+    (async
+     (if (await ($contains? set key opts))
+       key
+       not-found))))
 
 #!------------------------------------------------------------------------------
 
@@ -296,8 +292,8 @@
      (let [idx (path-get path level)]
        (if (pos? level)
          (let [child-node (if (.-storage set)
-                            (await (node/ensure-child node idx (.-storage set) opts))
-                            (node/ensure-child node idx))
+                            (await (node/$child node idx (.-storage set) opts))
+                            (node/child node idx))
                sub-path (await ($$_next-path set child-node path (dec level) opts))]
            (if (nil? sub-path)
              ;; nested node overflow
@@ -346,8 +342,8 @@
 
           :else
           (let [child-node (if (.-storage set)
-                             (await (node/ensure-child node idx (.-storage set) opts))
-                             (node/ensure-child node idx))
+                             (await (node/$child node idx (.-storage set) opts))
+                             (node/child node idx))
                 path' (await ($$_prev-path set child-node path (dec level) opts))]
             (cond
               (some? path') ;; no sub-overflow, keep current idx
@@ -359,8 +355,8 @@
               ;; nested overflow, advance current idx, reset subsequent indexes
               :else
               (let [child-node (if (.-storage set)
-                                  (await (node/ensure-child node (dec idx) (.-storage set) opts))
-                                  (node/ensure-child node (dec idx)))
+                                  (await (node/$child node (dec idx) (.-storage set) opts))
+                                  (node/child node (dec idx)))
                     path' (if (.-storage set)
                             (await (-rpath child-node path (dec level) (.-storage set) opts))
                             (-rpath child-node path (dec level)))]
@@ -411,8 +407,8 @@
          (recur
            (dec level)
            (if (.-storage set)
-             (await (node/ensure-child node (path-get path level) (.-storage set) opts))
-             (node/ensure-child node (path-get path level))))
+             (await (node/$child node (path-get path level) (.-storage set) opts))
+             (node/child node (path-get path level))))
          (.-keys node))))))
 
 ;;;-----------------------------------------------------------------------------
@@ -665,7 +661,7 @@
                 (if (pos? level)
                   ;; inner node
                   (let [last-idx (dec (impl/node-len node))
-                        child-node (await (node/ensure-child node last-idx storage opts))]
+                        child-node (await (node/$child node last-idx storage opts))]
                     (await (-rpath child-node
                                    (path-set path level last-idx)
                                    (dec level)
@@ -685,8 +681,8 @@
       ;; inner node
       (if (== idx-l idx-r)
         (-distance set (if (.-storage set)
-                          (node/ensure-child node idx-l (.-storage set) {:sync? true})
-                          (node/ensure-child node idx-l))
+                          (node/$child node idx-l (.-storage set) {:sync? true})
+                          (node/child node idx-l))
                    left
                    right
                    (dec level))
@@ -741,8 +737,8 @@
                  (let [keys (.-keys node)
                        idx  (binary-search-l comparator keys (- keys-l 2) key)
                        child-node (if (.-storage set)
-                                    (await (node/ensure-child node idx (.-storage set) opts))
-                                    (node/ensure-child node idx))]
+                                    (await (node/$child node idx (.-storage set) opts))
+                                    (node/child node idx))]
                    (recur
                     child-node
                     (path-set path level idx)
@@ -775,8 +771,8 @@
                      idx        (binary-search-r comparator keys (- keys-l 2) key)
                      res        (path-set path level idx)
                      child-node (if (.-storage set)
-                                  (await (node/ensure-child node idx (.-storage set) opts))
-                                  (node/ensure-child node idx))]
+                                  (await (node/$child node idx (.-storage set) opts))
+                                  (node/child node idx))]
                  (recur
                    child-node
                    res
@@ -873,15 +869,9 @@
   (when (and path (path-lt path till-path))
     (AsyncSeq. set path till-path nil nil)))
 
-(defn afirst [s]
-  ;; TODO support BTSet here, convert to AsyncSeq w/ defaults ?
-  (assert (instance? AsyncSeq s))
-  (impl/-afirst s))
+(defn afirst [s] (impl/-afirst s))
 
-(defn arest [s]
-  ;; TODO support BTSet here, convert to AsyncSeq w/ defaults ?
-  (assert (instance? AsyncSeq s))
-  (impl/-arest s))
+(defn arest [s] (impl/-arest s))
 
 (defn async-slice
   "Async version of slice that returns an AsyncSeq."
@@ -922,10 +912,8 @@
   (-disjoin [this key] ($disjoin this key comparator {:sync? true}))
 
   ILookup
-  (-lookup [this k]
-    (impl/node-lookup root comparator k storage {:sync? true}));;---------------TODO ensure-root?
-  (-lookup [this k not-found]
-    (or (impl/node-lookup root comparator k storage {:sync? true}) not-found))
+  (-lookup [this k] ($lookup this k nil {:sync? true}))
+  (-lookup [this k not-found] ($lookup this k not-found {:sync? true}))
 
   ISeqable
   (-seq [this] (iter this))
