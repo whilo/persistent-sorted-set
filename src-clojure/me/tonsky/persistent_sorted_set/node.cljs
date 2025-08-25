@@ -94,7 +94,7 @@
               (do
                 (assert (and (<= 0 ins) (< ins (alength (.-keys node)))))
                 (let [child (await ($child-storage node storage ins opts))]
-                  (await (impl/node-contains? child storage key cmp)))))))))))
+                  (await (impl/node-contains? child storage key cmp opts)))))))))))
 
 (deftype Node [keys ^:mutable children ^:mutable addresses ^:mutable _hash]
   Object

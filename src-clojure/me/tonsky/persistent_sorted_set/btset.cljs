@@ -182,13 +182,10 @@
         shift        (if (map? root-address-or-info)
                        (:shift root-address-or-info)
                        (:shift opts 0))
-        cnt          (if (map? root-address-or-info)
-                       (:count root-address-or-info)
-                       (:count opts 0))
         cmp          (if (map? root-address-or-info)
                        (or (:comparator root-address-or-info) compare)
                        (or (:comparator opts) compare))]
-    (BTSet. nil shift cnt cmp meta uninitialized-hash storage address)))
+    (BTSet. nil shift -1 cmp meta uninitialized-hash storage address)))
 
 #!------------------------------------------------------------------------------
 

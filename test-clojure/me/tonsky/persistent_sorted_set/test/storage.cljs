@@ -31,7 +31,7 @@
     (let [address (gen-addr)]
       (swap! *disk assoc address
              (pr-str
-              {:level     (.-shift node) ;;<------------------------------------ FIX ME
+              {:level     (.-shift node) ;;<------------------------------------TODO FIX ME
                :keys      (.-keys node)
                :addresses (when (instance? Node node) (.-addresses node))}))
       address))
@@ -41,7 +41,7 @@
      (let [{:keys [keys addresses level]} (edn/read-string (@*disk address))
            node (if addresses
                   (let [n (Node. keys nil addresses nil)]
-                    (set! (.-level n) level) ;;<-------------------------------- FIX ME
+                    (set! (.-level n) level) ;;<--------------------------------TODO FIX ME
                     n)
                   (Leaf. keys nil))]
        (dbg "restored<" (type node) ">")
@@ -69,9 +69,6 @@
 
 (defn node? [o] (instance? Node o))
 
-
-;; TODO ILookup needs ensure-root
-
 (deftest ascending-insert-test
   (and
    (testing "one item"
@@ -90,7 +87,7 @@
            (is (= 1 (:writes @*stats)))
            (is (= 0 (:reads @*stats)))
            (testing "restoring one item"
-             (let [restored (set/restore address storage {:count 1})]             ;<-- XXX
+             (let [restored (set/restore address storage {})]
                (and
                 (is (set? original))
                 (is (set? restored))
@@ -114,7 +111,7 @@
            (is (= address (.-address original)))
            (is (= 1 (:writes @*stats)))
            (is (= 0 (:reads @*stats)))
-           (let [restored (set/restore address storage {:count 32})]            ;<-- XXX
+           (let [restored (set/restore address storage {})]
              (and
               (is (= restored original))
               (is (instance? Leaf (.-root restored)))
@@ -141,7 +138,7 @@
            (is (= address (.-address original)))
            (is (= 3 (:writes @*stats)))
            (is (= 0 (:reads @*stats)))
-           (let [restored (set/restore address storage {:count 33})]            ;<--- XXX
+           (let [restored (set/restore address storage {})]
              (and
               (is (= restored original))
               (let [children (children (.-root restored))]
@@ -158,6 +155,8 @@
        (and
         (is (= 0 (:writes @*stats)))
         (is (= 0 (:reads @*stats)))
+        (is (contains? original 0))
+        (is (contains? original 1023))
         (is (instance? Node (.-root original)))
         (let [cs (children (.-root original))
               root-keys (ks (.-root original))]
@@ -174,12 +173,14 @@
               (is (= 67 (:writes @*stats)))
               (is (= 0 (:reads @*stats)))
               (is (empty? (deref (:*memory storage))))
-              (let [restored (set/restore address storage {:count 1024})]     ;<--- XXX
+              (let [restored (set/restore address storage {})]
                 (and
                  (is (empty? (deref (:*memory storage))))
                  (is (= 0 (:reads @*stats)))
                  (is (= restored original))
                  (is (= 67 (:reads @*stats)))
+                 (is (contains? restored 0))
+                 (is (contains? restored 1023))
                  (let [cs (children (.-root restored))
                        root-keys (ks (.-root original))]
                    (and
@@ -196,50 +197,4 @@
 ;; disj
 ;; count
 ;; walk-addresses
-
-
-; (defn loaded-ratio
-;   ([set]
-;    (let [storage (.-storage set)
-;          address (.-address set)
-;          root    (.-root set)]
-;      (loaded-ratio (some-> storage :*memory deref) address root)))
-;   ([memory address node]
-;    (when *debug*
-;      (println address (contains? memory address) node (memory address)))
-;    (if (and address (not (contains? memory address)))
-;      0.0
-;      (let [node (or node (memory address))]
-;        (if (instance? Leaf node)
-;          1.0
-;          (let [len (count (.-keys node))]
-;            (double
-;              (/ (->>
-;                   (mapv
-;                     (fn [_ child-addr child]
-;                       (loaded-ratio memory child-addr child))
-;                     (range len)
-;                     (or (.-addresses node) (repeat len nil))
-;                     (or (.-children node)  (repeat len nil)))
-;                   (reduce + 0))
-;                len))))))))
-
-; (defn durable-ratio
-;   ([set]
-;    (durable-ratio (.-address set) (.-root set)))
-;   ([address node]
-;    (cond
-;      (some? address)       1.0
-;      (instance? Leaf node) 0.0
-;      :else
-;      (let [len (count (.-keys node))]
-;        (/ (->>
-;             (map
-;               (fn [_ child-addr child]
-;                 (durable-ratio child-addr child))
-;               (range len)
-;               (.-addresses node)
-;               (.-children node))
-;             (reduce + 0))
-;          len)))))
 
