@@ -1,4 +1,8 @@
 {:source-paths ["src-clojure" "test-clojure" "bench-clojure"]
+ 
+ :dependencies
+ [[org.clojure/core.async "1.8.741"]]
+ 
  :builds
  {:bench
   {:target           :node-script
@@ -10,4 +14,88 @@
   {:target           :node-test
    :output-to        "target/test.js"
    :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\..*$"
+   :compiler-options {:infer-externs true}}
+   
+  :async-test
+  {:target           :node-test
+   :output-to        "target/async-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.async.*$"
+   :compiler-options {:infer-externs true}}
+   
+  :debug
+  {:target           :node-script
+   :main             debug-comparator/-main
+   :output-to        "target/debug.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-comparator
+  {:target           :node-script
+   :main             test-comparator/-main
+   :output-to        "target/test-comparator.js"
+   :compiler-options {:infer-externs true}}
+   
+  :sync-only-test
+  {:target           :node-test
+   :output-to        "target/sync-only-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.sync-only"
+   :compiler-options {:infer-externs true}}
+   
+  :minimal
+  {:target           :node-test
+   :output-to        "target/minimal-storage-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.minimal-storage"
+   :compiler-options {:infer-externs true}}
+   
+  :async-iteration-test
+  {:target           :node-test
+   :output-to        "target/async-iteration-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.async-iteration"
+   :compiler-options {:infer-externs true}}
+   
+  :simple-async-test
+  {:target           :node-test
+   :output-to        "target/simple-async-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.simple-async-test"
+   :compiler-options {:infer-externs true}}
+   
+  :debug-arities
+  {:target           :node-test
+   :output-to        "target/debug-arities.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.debug-arities"
+   :compiler-options {:infer-externs true}}
+   
+  :test-fix
+  {:target           :node-script
+   :main             test-fix/init
+   :output-to        "test-fix.js"
+   :compiler-options {:infer-externs true}}
+   
+  :test-minimal
+  {:target           :node-script
+   :main             test-minimal/-main
+   :output-to        "test-minimal.js"
+   :compiler-options {:infer-externs true}}
+   
+  :run-large-set-test
+  {:target           :node-script
+   :main             run-large-set-test/-main
+   :output-to        "run-large-set-test.js"
+   :compiler-options {:infer-externs true}}
+   
+  :large-async-only
+  {:target           :node-test
+   :output-to        "target/large-async-only.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.large-async-only"
+   :compiler-options {:infer-externs true}}
+   
+  :debug-conj-issue
+  {:target           :node-test
+   :output-to        "target/debug-conj-issue.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.debug-conj-issue"
+   :compiler-options {:infer-externs true}}
+   
+  :core-test
+  {:target           :node-test
+   :output-to        "target/core-test.js"
+   :ns-regexp        "me\\.tonsky\\.persistent-sorted-set\\.test\\.(core|small|stress)"
    :compiler-options {:infer-externs true}}}}
